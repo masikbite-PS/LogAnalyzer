@@ -83,6 +83,8 @@ namespace LogAnalyzer.ViewModels
                 LoadCallsRecord();
             else if (SelectedTable.Equals("CallsQueues", StringComparison.OrdinalIgnoreCase))
                 LoadCallsQueuesRecords();
+            else if (SelectedTable.Equals("AgentCalls", StringComparison.OrdinalIgnoreCase))
+                LoadAgentCallsRecords();
             else
                 LoadGenericRecords();
         }
@@ -141,6 +143,34 @@ namespace LogAnalyzer.ViewModels
             StatusMessage = count > 0
                 ? $"Found {count} CallsQueues record(s)"
                 : "No CallsQueues records found for this CallID";
+        }
+
+        private void LoadAgentCallsRecords()
+        {
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (procName, columns) = _sqlParser.ParseExecStatement(entry.Message);
+                if (!procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!columns.TryGetValue("CallRef", out var callRef) ||
+                    !callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var agentId = columns.TryGetValue("AgentID", out var aid) ? aid : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"AgentCalls — Agent: {agentId}" };
+                record.Columns = BuildColumns("AgentCalls", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} AgentCalls record(s)"
+                : "No AgentCalls records found for this CallID";
         }
 
         private void LoadGenericRecords()

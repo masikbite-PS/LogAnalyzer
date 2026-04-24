@@ -1,0 +1,63 @@
+h1. AgentCalls
+
+p(. This table contains information about the users' calls.
+
+h2. Columns
+
+table{background:#F5F5F5;margin-left:2em}.
+{background:#666666}. |{color:white}. *Name*|{color:white}. *Type*|{color:white}. *Null*|{color:white}. *Key*|{color:white}. *Default*|{color:white}. *Description*|
+|AgentID|varchar(64)||||The user number. It also takes into account the [[DB_DIVOS_SYSCFG_2021_2_Lines|Lines.guidOwnerAgent]] value.|
+|CallDirection|int||||The call direction.
+Possible values: 1 — Outgoing; 2 — Incoming.|
+|CallRef|nvarchar(128)||||The unique identifier of the call within the PBX. The same as [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.Id]].|
+|CallQueuesSeqNumber|int||||The queue sequence number within the call.
+Contains 0, if the call does not have the related records in the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues]] table.|
+|Supervisors|varchar(1000)|YES||null|Contains the comma separated list of the user numbers, that should review the call. If it is @not null@, then it is considered as *Marked* in *History* plugin.|
+|CalledNumber|varchar(64)||||The called number. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.CalledNumber]] value, if the user initiated the call. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.CalledNumber]] value, if the user received the call.|
+|CalledNumberInCNF|varchar(64)|||@''@|The called in Complete number format. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_AgentCalls|AgentCalls.CalledNumber]] value.|
+|CallingNumber|varchar(64)||||The calling number. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.CallingNumber]] value.|
+|DisconnectReason|int||||The PBX call disconnect reason code.
+Possible values:
+129 — transfer call;
+16 — normal clearing;
+17 — User busy;
+other ISDN codes.
+Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.DisconnectReason]] value. Contains 0, if the call is forwarded.|
+|DisconnectSource|int||||The call disconnect source.
+Possible values:
+0 — Unknown;
+1 — Calling party;
+2 — Called party;
+3 — PBX;
+Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.DisonnectSource]] value.
+Contains 1, if the call is forwarded. Contains 2, if the call is transferred.|
+|DurationSec|int|YES||null|The speaking duration in seconds. Contains the sum of the speaking duration, the hold duration, and the wait on the hold duration.|
+|StartDateTime|datetime||||The time of the call start. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.StartTime]] value, if the user initiated the call. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.StartTime]] value, if the user received the call.|
+|WaveFile|varchar(255)||||The file name of the recording file. Corresponds to the last [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.RecordFile]] entry, if the user initiates a call. It contains an empty string if the last entry does not exist. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.RecordFile]] value, if the user received the call.|
+|WaitTimeSec|int|YES||null|The waiting in the queue duration in seconds. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.WaitingDuration]] value, if the user initiated the call. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.WaitingDuration]] value, if the user received the call.|
+|AcceptTimeSec|int|YES||null|The ringing duration in seconds.  Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.AlertingDuration]], if the user initiated the call. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.AlertingDuration]], if the user received the call.|
+|TrunkNumber|varchar(64)|YES||null|Contains the outgoing service number, if the call is outbound. Otherwise, it contains @null@.|
+|HotlineNumber|varchar(64)|YES||null|Contains the hotline service number, if the call is to the hotline service. Otherwise, it contains @null@.|
+|InitialDialedNumber|varchar(64)|YES||null|Contains the original called number, if it differs from the actual called number. Otherwise, it contains @null@.|
+|ForwardedTo|varchar(64)|YES||null|Contains the number to which the call is transferred. Contains @null@, if the call is not transferred.|
+|AcSource|int|YES||null|Contains the source identifier of the autocall initiator. Custom numbers must start from @1000@.
+Clarity PBX reserves the following values:
+0 — the default value for Clarity SDK;
+1 — the Predictive Dialer calls.
+It is @null@ for simple calls. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.AcSource]] value.|
+|ACCallingNumber|varchar(64)|YES||null|Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.ACCallingNumber]] value.|
+|ACCalledNumber|varchar(64)|YES||null|Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.ACCalledNumber]] value.|
+|PartnerAgentID|varchar(64)|YES||null|The user number of the partner. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.AgentNumber]] value, if the user initiated the call. Corresponds to the [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.AgentNumber]] value, if the user received the call. It also takes in consideration the [[DB_DIVOS_SYSCFG_2021_2_Lines|Lines.guidOwnerAgent]] value.|
+|Comment|varchar(1024)|YES||null|Comment to call history item, edited from CC.|
+|HistoryContactId|bigint|YES|FK|null|History contact identifier.|
+|Cost|decimal(19,4)|YES||null|Cost of call. Filled only for outbound calls using mechanism of "Outbound calls cost calculation" feature.|
+|ConferenceId|uniqueidentifier|YES||null|Id of a related user conference. Contains null if a call was not a conference call. The same as Id in a [[DB_DIVOS_STATISTIK_2026_0_UserConferences|UserConferences]] table.|
+|MediaType|int|||0|Type of media. Possible values: 0 - call, 1 - live chat, 2 - task.|
+
+h2. Description
+
+p(. The calls that are not related to any user are not stored in this table. One record from the [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues]] table corresponds to one record in this table. The call is considered as related to a user if [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls.AgentNumber]] is set, or [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.AgentNumber]] is set, or [[DB_DIVOS_STATISTIK_2026_0_CallsQueues|CallsQueues.QueueNumber]] is a service that is directly assigned to the user. If the call is fixed forwarded from the service that is directly assigned to the user, it is not written. This table is used exclusively by the *History* plugin of *Communication Client*.
+
+h2. See also
+
+p(. [[DB_DIVOS_STATISTIK_2026_0_Calls|Calls]], [[DB_DIVOS_STATISTIK_2026_0_AgentStates|AgentStates]], [[DB_DIVOS_STATISTIK_2026_0_AgentServices|AgentServices]], [[DB_DIVOS_STATISTIK_2026_0_AgentLogins|AgentLogins]], [[DB_DIVOS_STATISTIK_2026_0_HistoryContacts|HistoryContacts]], [[DB_DIVOS_STATISTIK_2026_0_UserBindingDevice|UserBindingDevice]], [[DB_DIVOS_STATISTIK_2026_0_UserConferences|UserConferences]]

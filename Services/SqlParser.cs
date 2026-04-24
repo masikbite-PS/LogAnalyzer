@@ -7,6 +7,47 @@ namespace LogAnalyzer.Services
 {
     public class SqlParser
     {
+        // Column order for exec InsertAgentCall (positional parameters)
+        public static readonly IReadOnlyList<string> AgentCallColumns = new[]
+        {
+            "AgentID", "CallDirection", "CallRef", "CallQueuesSeqNumber", "Supervisors",
+            "CalledNumber", "CalledNumberInCNF", "CallingNumber", "DisconnectReason", "DisconnectSource",
+            "DurationSec", "StartDateTime", "WaveFile", "WaitTimeSec", "AcceptTimeSec",
+            "TrunkNumber", "HotlineNumber", "InitialDialedNumber", "ForwardedTo", "AcSource",
+            "ACCallingNumber", "ACCalledNumber", "PartnerAgentID", "Comment", "HistoryContactId",
+            "Cost", "ConferenceId", "MediaType"
+        };
+
+        public (string procName, Dictionary<string, string> columns) ParseExecStatement(string sql)
+        {
+            var match = Regex.Match(sql,
+                @"exec\s+(\w+)\s+(.*)",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            if (!match.Success)
+                return (string.Empty, new Dictionary<string, string>());
+
+            var procName = match.Groups[1].Value.Trim();
+            var rawValues = match.Groups[2].Value.Trim();
+            var values = ParseValues(rawValues);
+
+            IReadOnlyList<string> columnNames = procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase)
+                ? AgentCallColumns
+                : Array.Empty<string>();
+
+            var result = new Dictionary<string, string>();
+            for (int i = 0; i < columnNames.Count && i < values.Count; i++)
+            {
+                var value = values[i];
+                if (value.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                result[columnNames[i]] = UnquoteValue(value);
+            }
+
+            return (procName, result);
+        }
+
         public (string tableName, Dictionary<string, string> columns) ParseInsertStatement(string sql)
         {
             var match = Regex.Match(sql,

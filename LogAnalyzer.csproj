@@ -23,6 +23,9 @@
     <Content Include="Data\CallsQueues_table_reference.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Data\AgentCalls_table_reference.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>
