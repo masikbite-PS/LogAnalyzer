@@ -1,0 +1,254 @@
+{
+  "tables": [
+    {
+      "name": "Calls",
+      "displayName": "Calls Table",
+      "fields": {
+        "Id": {
+          "type": "nvarchar(128)",
+          "description": "Unique identifier of the call inside PBX"
+        },
+        "SessionId": {
+          "type": "nvarchar(128)",
+          "description": "Groups related calls belonging to the same session"
+        },
+        "StartTime": {
+          "type": "datetime",
+          "description": "Call start timestamp (UTC)"
+        },
+        "Duration": {
+          "type": "int",
+          "description": "Total call lifetime in milliseconds",
+          "unit": "ms"
+        },
+        "CallType": {
+          "type": "int",
+          "description": "Call direction",
+          "values": {
+            "1": "Inbound",
+            "2": "Outbound",
+            "3": "Internal",
+            "0": "Other"
+          }
+        },
+        "CallingNumber": {
+          "type": "varchar(64)",
+          "description": "Call initiator identity"
+        },
+        "CalledNumber": {
+          "type": "varchar(64)",
+          "description": "Original target number"
+        },
+        "ChannelNumber": {
+          "type": "int",
+          "description": "Channel used to start the call"
+        },
+        "IsTrunk": {
+          "type": "int",
+          "description": "Channel type",
+          "values": {
+            "1": "Trunk channel",
+            "0": "Internal line"
+          }
+        },
+        "LineId": {
+          "type": "int",
+          "description": "Unique PBX line identifier"
+        },
+        "UserLogin": {
+          "type": "varchar(64)",
+          "description": "Logged user on channel or line owner"
+        },
+        "ScriptProcessingDuration": {
+          "type": "int",
+          "description": "Script execution duration",
+          "unit": "ms"
+        },
+        "WaitingDuration": {
+          "type": "int",
+          "description": "Time waiting in queue",
+          "unit": "ms"
+        },
+        "AlertingDuration": {
+          "type": "int",
+          "description": "Time in alerting state",
+          "unit": "ms"
+        },
+        "SpeakingDuration": {
+          "type": "int",
+          "description": "Time in speaking state (connected)",
+          "unit": "ms"
+        },
+        "HoldDuration": {
+          "type": "int",
+          "description": "Hold time on initiator side",
+          "unit": "ms"
+        },
+        "ProcessingResult": {
+          "type": "int",
+          "description": "Queue processing result",
+          "values": {
+            "0": "Lost without queue",
+            "1": "Lost before queue",
+            "2": "Lost in queue",
+            "3": "Lost in alert",
+            "4": "Connected"
+          }
+        },
+        "ProcessingQueueNumber": {
+          "type": "varchar(64)",
+          "description": "First connected queue or last queue before disconnect"
+        },
+        "DisconnectSourceType": {
+          "type": "int",
+          "description": "Disconnect source type",
+          "values": {
+            "0": "Unknown",
+            "1": "PBX",
+            "2": "CTI client",
+            "3": "SIP"
+          }
+        },
+        "DisconnectSource": {
+          "type": "int",
+          "description": "Who initiated disconnect",
+          "values": {
+            "0": "Unknown",
+            "1": "Calling party",
+            "2": "Called party",
+            "3": "PBX"
+          }
+        },
+        "OwnPhysicalId": {
+          "type": "nvarchar(128)",
+          "description": "Calling party physical call identifier"
+        },
+        "PartnerPhysicalId": {
+          "type": "nvarchar(128)",
+          "description": "Called party physical call identifier"
+        }
+      }
+    },
+    {
+      "name": "CallQueues",
+      "displayName": "Call Queues Table",
+      "fields": {
+        "CallId": {
+          "type": "nvarchar(128)",
+          "description": "Call identifier"
+        },
+        "SeqNumber": {
+          "type": "int",
+          "description": "Queue sequence number within the call (0-based)"
+        },
+        "StartTime": {
+          "type": "datetime",
+          "description": "When call started to be related to queue (UTC)"
+        },
+        "Duration": {
+          "type": "int",
+          "description": "Duration of call-queue relation",
+          "unit": "ms"
+        },
+        "QueueNumber": {
+          "type": "varchar(64)",
+          "description": "Extension number found for called number"
+        },
+        "QueueType": {
+          "type": "int",
+          "description": "Queue type",
+          "values": {
+            "1": "Hotline",
+            "2": "Outgoing",
+            "3": "Group",
+            "4": "Conference",
+            "5": "Orbit",
+            "6": "NotExist",
+            "0": "Other"
+          }
+        },
+        "SLTime": {
+          "type": "int",
+          "description": "Service level time",
+          "unit": "seconds"
+        },
+        "ScriptProcessingDuration": {
+          "type": "int",
+          "description": "Script pre-processing duration",
+          "unit": "ms"
+        },
+        "WaitingDuration": {
+          "type": "int",
+          "description": "Call waiting in queue",
+          "unit": "ms"
+        },
+        "AlertingDuration": {
+          "type": "int",
+          "description": "Call in alerting state",
+          "unit": "ms"
+        },
+        "SpeakingDuration": {
+          "type": "int",
+          "description": "Call in speaking state (connected)",
+          "unit": "ms"
+        },
+        "HoldDuration": {
+          "type": "int",
+          "description": "Call on hold",
+          "unit": "ms"
+        },
+        "AWTDuration": {
+          "type": "int",
+          "description": "Agent After Work Time duration",
+          "unit": "ms"
+        },
+        "ChannelNumber": {
+          "type": "int",
+          "description": "Partner channel number"
+        },
+        "UserLogin": {
+          "type": "varchar(64)",
+          "description": "User logged on channel"
+        },
+        "ForwardReason": {
+          "type": "int",
+          "description": "Call forwarding reason",
+          "values": {
+            "0": "Fixed",
+            "1": "Schedule based",
+            "2": "Queue Overflow",
+            "3": "Connection Timeout",
+            "4": "System Queue Timeout",
+            "5": "No Agent Logged In",
+            "6": "No Agent Free",
+            "7": "Queue Not Existing"
+          }
+        },
+        "ForwardTarget": {
+          "type": "int",
+          "description": "Forward target type",
+          "values": {
+            "0": "Number",
+            "1": "Voice Mail",
+            "2": "Wave File",
+            "3": "Busy",
+            "4": "User Script",
+            "5": "Get Back Transferred"
+          }
+        },
+        "RecordFile": {
+          "type": "varchar(255)",
+          "description": "Recording file name"
+        },
+        "IsAnalyzed": {
+          "type": "bit",
+          "description": "Was call analyzed by AI",
+          "values": {
+            "0": "No",
+            "1": "Yes"
+          }
+        }
+      }
+    }
+  ]
+}

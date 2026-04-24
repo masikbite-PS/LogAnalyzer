@@ -1,0 +1,196 @@
+<Window x:Class="LogAnalyzer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LogAnalyzer"
+        xmlns:converters="clr-namespace:LogAnalyzer.Converters"
+        mc:Ignorable="d"
+        Title="PBX Log Analyzer" Height="750" Width="1400" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <converters:DurationConverter x:Key="DurationConverter"/>
+    </Window.Resources>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="10">
+            <TextBlock Text="PBX Log Analyzer" FontSize="16" FontWeight="Bold"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="PBX Folder:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding PbxFolderPath}" IsReadOnly="True" Padding="5" Background="#F0F0F0"/>
+                <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding SelectPbxFolderCommand}" Padding="15,5" Width="100" Margin="10,0,0,0"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="SIP Folder:" VerticalAlignment="Center" Margin="0,8,10,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SipFolderPath}" IsReadOnly="True" Padding="5" Background="#F0F0F0" Margin="0,8,0,0"/>
+                <Button Grid.Row="1" Grid.Column="2" Content="Browse" Command="{Binding SelectSipFolderCommand}" Padding="15,5" Width="100" Margin="10,8,0,0"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="CallID:" VerticalAlignment="Center" Margin="0,8,10,0"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CallId, UpdateSourceTrigger=PropertyChanged}" Padding="5" Margin="0,8,0,0"/>
+                <Button Grid.Row="2" Grid.Column="2" Content="Analyze" Command="{Binding AnalyzeCommand}" Padding="15,5" Width="100" Margin="10,8,0,0"/>
+            </Grid>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="10" Background="#F5F5F5">
+            <ProgressBar Height="20" Value="{Binding ProgressValue}" Maximum="100"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Export" Command="{Binding ExportLogsCommand}" Padding="15,5"/>
+            </Grid>
+        </StackPanel>
+
+        <TabControl DockPanel.Dock="Top" Margin="10">
+            <!-- Tab 1: Log Analysis -->
+            <TabItem Header="Log Analysis" Padding="10,5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="5"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E0E0E0"/>
+
+                    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <TextBlock Text="Call Info" FontWeight="Bold" FontSize="12" Margin="0,0,0,8"/>
+
+                            <TextBlock Text="Start Time" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.ServerStartDateTime}" Margin="0,2,0,8" FontFamily="Courier New" FontSize="10"/>
+
+                            <TextBlock Text="From" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.CallingNumber}" Margin="0,2,0,8" FontSize="11"/>
+
+                            <TextBlock Text="To" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.CalledNumber}" Margin="0,2,0,8" FontSize="11"/>
+
+                            <TextBlock Text="User" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.UserLogin}" Margin="0,2,0,8" FontSize="11"/>
+
+                            <TextBlock Text="Call Type" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.CallTypeName}" Margin="0,2,0,8" FontSize="11"/>
+
+                            <TextBlock Text="Duration" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.Duration, Converter={StaticResource DurationConverter}}" Margin="0,2,0,8" FontSize="11"/>
+
+                            <TextBlock Text="Channel" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBlock Text="{Binding CallInfo.ChannelNumber}" Margin="0,2,0,8"/>
+
+                            <TextBlock Text="Partner ID" FontWeight="Bold" FontSize="10" Foreground="#555"/>
+                            <TextBox Text="{Binding CallInfo.PartnerPhysicalId}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontFamily="Courier New" FontSize="9" Background="#F9F9F9" TextWrapping="Wrap"/>
+
+                            <TextBlock Text="Sources" FontWeight="Bold" FontSize="10" Foreground="#555" Margin="0,4,0,4"/>
+                            <ListBox ItemsSource="{Binding CallInfo.SourceFiles}" Height="80">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontSize="9"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ListBox Grid.Column="2" ItemsSource="{Binding LogEntries}" Margin="10" FontFamily="Courier New" FontSize="10">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Margin="0,2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Debug">
+                                                    <Setter Property="TextBlock.Foreground" Value="#808080"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Warning">
+                                                    <Setter Property="TextBlock.Foreground" Value="#FF8C00"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Error">
+                                                    <Setter Property="TextBlock.Foreground" Value="#FF0000"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: SQL Data -->
+            <TabItem Header="SQL Data" Padding="10,5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="10,10,10,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="250"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Table:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding SqlDataViewModel.AvailableTables}"
+                                  SelectedItem="{Binding SqlDataViewModel.SelectedTable, UpdateSourceTrigger=PropertyChanged}"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="10,0,10,0">
+                        <ItemsControl ItemsSource="{Binding SqlDataViewModel.SqlRecords}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,12">
+                                        <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4">
+                                            <TextBlock Text="{Binding RecordLabel}" Foreground="White"
+                                                       FontWeight="Bold" FontSize="11"/>
+                                        </Border>
+                                        <DataGrid ItemsSource="{Binding Columns}" AutoGenerateColumns="False"
+                                                  CanUserAddRows="False" IsReadOnly="True"
+                                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                  BorderThickness="1" BorderBrush="#CCCCCC"
+                                                  RowBackground="White" AlternatingRowBackground="#F8F8F8">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="160"/>
+                                                <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="220">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="110"/>
+                                                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock Grid.Row="2" Margin="10,4,10,6"
+                               Text="{Binding SqlDataViewModel.StatusMessage}"
+                               VerticalAlignment="Center" Foreground="#555"/>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

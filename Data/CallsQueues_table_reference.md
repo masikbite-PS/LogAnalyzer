@@ -1,0 +1,59 @@
+## Columns
+
+| Name | Type | Null | Key | Default | Description |
+|------|------|------|-----|---------|-------------|
+| CallId | nvarchar(128) | | PK | | The call identifier. |
+| SeqNumber | int | | PK | | The queue sequence number within the call. It starts from 0 and is increased by 1 for every new entry. It is unique within one call. |
+| StartTime | datetime | | | | The time when the call started to be related to the specified queue. In UTC. |
+| ServerStartDateTime | datetime | | | | The time when the call started to be related to the specified queue. In local time of server. |
+| Duration | int | | | | The duration of the call-queue relation in milliseconds. This value includes the total time the call was related to the specified queue. `Duration = ScriptProcessingDuration + WaitingDuration + AlertingDuration + SpeakingDuration + WaitingOnHoldDuration + HoldDuration`. |
+| SourceType | int | | | | Describes the source of the call-queue relation. Possible values are:<br/>100 — CallStart (The call was started and routed to the given queue because of the called number (direct calls)<br/>0..20 — CallForward (the call was forwarded to the queue)<br/>21 — CallBlindTransfer (the call started because of the blind transfer)<br/>22 — CallAtendedTransfer (the call started because of the attended transfer)<br/>23 — CallReject<br/>24 — Takeover |
+| CalledNumber | varchar(64) | | | | The called number. |
+| QueueNumber | varchar(64) | YES | | null | The extension number found for the called number. |
+| DialedNumber | varchar(64) | YES | | null | Real called number sending in sip Invite message for outgoing calls throws trunk line. For other calls, it contains 'null'. |
+| QueueType | int | | | | The queue type. Possible values are:<br/>1 — Hotline<br/>2 — Outgoing<br/>3 — Group<br/>4 — Conference<br/>5 — Orbit<br/>6 — NotExist<br/>0 — All other |
+| OutboundRoutingRuleId | int | YES | | | For outbound calls contains Id from OutboundRoutingRules or "0" if called number is Emergency number. Otherwise "null". |
+| SLTime | int | | | | The service level time in seconds for the given queue. |
+| ScriptProcessingDuration | int | | | | The duration in milliseconds of the scripts pre-processing via PBX during the call to the specified queue. "Pre-processing" here means the time between the service assignment and placement the call into the queue or disconnection. It can be used to calculate the User IVRs duration. Processing of scripts after the call leaving the queue or is forwarded is not included. This time is called script post-processing. For the attended transferred calls or the rejected calls, the column value is 0. |
+| WaitingDuration | int | YES | | null | The duration in milliseconds the call is waiting in the specified queue. The call is considered to be lost before the queue if `WaitingDuration is null`. "Lost before the queue" means that the call is not placed into the queue due to the user scripts processing. If the call is to the conference service `WaitingDuration = 0`. |
+| AlertingDuration | int | YES | | null | The duration in milliseconds the call is in the alerting state for the specified queue. The call is considered to be lost in the queue if `WaitingDuration is not null and AlertingDuration is null`. If the call is to the conference service `AlertingDuration = 0`. |
+| SpeakingDuration | int | YES | | null | The duration in milliseconds the call is in the speaking state for the specified queue. The call is considered to be lost in the alert, if `AlertingDuration is not null and SpeakingDuration is null`. The call is considered to be answered if `SpeakingDuration is not null`. |
+| HoldDuration | int | YES | | null | The duration in milliseconds the call is held for the specified queue. The value is `null`, if the call is not held. |
+| AWTDuration | int | YES | | null | The duration in milliseconds the agent is in the AWT state after the call to the specified queue. The value is `null`, if the AWT state is not started. It also may contain `null` for the consultation call that resulted in the attended transfer. |
+| RecordFile | varchar(255) | | | | The file name of the recording file. If the recording is not activated the value is `null`. |
+| RecordFileHash | varchar(32) | YES | | null | String representation of a 256 bit hash code received from a visible recording file. The hash algorithm is SHA256. If a recording was not written the column contains `null` value. |
+| ChannelNumber | int | YES | | null | The partner channel number. |
+| IsTrunk | int | YES | | null | The flag that indicates whether the line that contains the channel, which number is contained in the **ChannelNumber** column, is a trunk. If it is a trunk, then the value is 1, otherwise 0. |
+| LineId | int | YES | | null | The unique line number. |
+| UserLogin | varchar(64) | YES | | null | The login of the user that is logged in on the channel, which number is contained in the **ChannelNumber** column. If no user is logged in, the value will be taken from the line owner user. If the line hasn't owner user, the value takes from fix assigned user. If no fix assigned user, the value contains `null`. |
+| ForwardReason | int | YES | | null | The call forwarding reason. Possible values are:<br/>0 — Fixed<br/>1 — Schedule based<br/>2 — Waiting Queue Overflow<br/>3 — Connection Timeout<br/>4 — System Waiting Queue Timeout<br/>5 — No Agent Logged In<br/>6 — No Agent Free<br/>7 — Queue Not Existing<br/>8 — Get Back Transferred Call Timeout<br/>9 — Group Queue Timeout<br/>10 — User Waiting Queue Timeout<br/>11 — User Script Forward<br/>12 — Reject Hotline Forward<br/>14 — Waiting Queue Maximum Time Overflow<br/>15 — Ringing Timeout<br/>16 — Boss Secretary<br/>17 — Waiting queue timeout<br/>If the call is not forwarded, the value is `null`. |
+| ForwardTarget | int | YES | | null | The forward target. Possible values are:<br/>0 — Number — the call is routed to some other queue<br/>1 — Voice Mail — the message for voice mail is recorded<br/>2 — Wave File — some wave is played to the user<br/>3 — Busy — the call is hanged up<br/>4 — User Script — the user script is executed<br/>5 — Get Back Transferred Call — the call is returned back to the previous partner<br/>The forward target identifies the immediate target of forwarding and does not show the final destination. It means, for example, that the call can be forwarded to the wave when the user presses the DTMF button '1' and gets to the voice mail. In the statistics, there will be no record of the voicemail. If the call is not forwarded, the value is `null`. |
+| ForwardTargetInfo | nvarchar(2048) | YES | | null | The additional information for the forward target. If `ForwardTarget = Number` or `ForwardTarget = GetBackTransferredCall` it contains the forwarded number. If `ForwardTarget = Wave` it contains the file name of the played wave, otherwise empty. If the call is not forwarded, the value is `null`. |
+| TransferredTo | varchar(64) | YES | | null | The target number of the call transfer that happened without the call initiator changing. It can differ from the next call-queue relation. If the call is transferred with the call initiator changing, the value is `null`. |
+| TransferredWith | nvarchar(128) | YES | | null | The **CallId** of the consultation call. If the call transfer is without call initiator changing or the blind transfer without call initiator changing then the value is `null`. |
+| CallDurationBeforeTransfer | int | YES | | null | The duration of the call before it is transferred without call initiator changing. If the call is not transferred the value is null. |
+| CallDurationAfterTransfer | int | YES | | null | The duration of the call after the transfer without call initiator changing. If the call is not transferred the value is `null`. |
+| RecordFileHidden | varchar(255) | | | `''` | The file name of the recording file if recording for hidden recording. If the recording is not activated the value is `null`. |
+| RecordFileAdministrative | varchar(255) | | | `''` | The file name of the recording file for Administrative Recording. If the recording is not activated the value is `null`. |
+| ExternalCustomerId | varchar(255) | YES | | null | User specified customer identity. |
+| ObligedRecordingTimeLimit | datetime | YES | | null | Store final date of store recording calculated automatically. (Look 'DB_DIVOS_SYSCFG.Services.ObligedCallsMode') |
+| ManualRecordingTimeLimit | datetime | YES | | null | Store final date of store recording set by user. |
+| RecordingDeletionSource | int | | | 0 | It stores information about a source of deleting data about recording from the current row, possible values:<br/>0 — not deleted<br/>1 — deleted by stored procedure 'DB_DIVOS_STATISTIK.ClearRecordings'<br/>2 — deleted by stored procedure 'DB_DIVOS_STATISTIK.ClearDataAboutFile' (DB_DIVOS_STATISTIK.ClearDataAboutFile - used by AutoDeleteManager when it deletes files using functionality about clearing disk space) |
+| Cost | decimal(19,4) | YES | | null | Cost of call. Filled only for outbound calls using a mechanism of "Outbound calls cost calculation" feature. |
+| WasTakenOver | bit | | | 0 | Contains 1 if a call was taken over. If a call was already ringing and not waiting in a queue, 'TransferredTo' column contains a number that took over and next CallQueue entry contains 24 in "SourceType" column. |
+| IsTranscribed | bit | | | 0 | Contains 1 if a call was transcribed with Speech Transcription Service. |
+| RecordFileTranscription | nvarchar(max) | YES | | null | Contains call transcription if the call was transcribed with Speech Transcription Service. |
+| ConferenceId | uniqueidentifier | YES | | null | Contains conference identifier if a call was joined to the conference, otherwise null. It is logically a foreign key to a table Conferences. |
+| SummaryIssue | nvarchar(max) | YES | | null | Speech Transcription Service writes the issue description to this column after the conversation analysis. |
+| SummaryResolution | nvarchar(max) | YES | | null | Speech Transcription Service writes the issue resolution to this column after the conversation analysis. |
+| SummaryRecap | nvarchar(max) | YES | | null | Speech Transcription Service writes the call summary to this column after the conversation analysis. |
+| SentimentPositive | real | YES | | null | Positive sentiment score of the whole conversation. |
+| SentimentNeutral | real | YES | | null | Neutral sentiment score of the whole conversation. |
+| SentimentNegative | real | YES | | null | Negative sentiment score of the whole conversation. SentimentPositive+SentimentNeutral+SentimentNegative=1 |
+| SentimentUserPositive | real | YES | | null | Positive sentiment score of user speech. |
+| SentimentUserNeutral | real | YES | | null | Neutral sentiment score of user speech. |
+| SentimentUserNegative | real | YES | | null | Negative sentiment score of user speech. SentimentUserPositive+SentimentUserNeutral+SentimentUserNegative=1 |
+| SentimentCustomerPositive | real | YES | | null | Positive sentiment score of customer speech. |
+| SentimentCustomerNeutral | real | YES | | null | Neutral sentiment score of customer speech. |
+| SentimentCustomerNegative | real | YES | | null | Negative sentiment score of customer speech. SentimentCustomerPositive+SentimentCustomerNeutral+SentimentCustomerNegative=1 |
+| IsAnalyzed | bit | | | 0 | Contains 1 if a call was successfully analyzed by AI Integration Service, otherwise 0. |

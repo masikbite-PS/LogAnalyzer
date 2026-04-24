@@ -1,0 +1,24 @@
+using System;
+using System.Collections.Generic;
+
+namespace LogAnalyzer.Models
+{
+    public class CallInfo
+    {
+        public string CallId { get; set; } = string.Empty;
+        public string? CallingNumber { get; set; }
+        public string? CalledNumber { get; set; }
+        public string? ChannelNumber { get; set; }
+        public string? PartnerPhysicalId { get; set; }
+        public long? Duration { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+
+        // From SQL Calls record
+        public string? ServerStartDateTime { get; set; }
+        public string? UserLogin { get; set; }
+        public string? CallTypeName { get; set; }
+
+        public List<string> SourceFiles { get; set; } = new();
+    }
+}
