@@ -31,9 +31,15 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish
 
+      - name: Create Release Package
+        run: |
+          cd publish
+          7z a LogAnalyzer.zip LogAnalyzer.exe Data/
+          cd ..
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: PBX Log Analyzer ${{ github.ref_name }}
-          files: publish/LogAnalyzer.exe
+          files: publish/LogAnalyzer.zip
           generate_release_notes: true
