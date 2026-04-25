@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LogAnalyzer.Models;
 using LogAnalyzer.Services;
 
@@ -40,6 +43,58 @@ namespace LogAnalyzer.ViewModels
 
         [ObservableProperty]
         private string statusMessage = "Run analysis first";
+
+        [RelayCommand]
+        public void ExportToTextile()
+        {
+            if (SqlRecords.Count == 0)
+            {
+                MessageBox.Show("No data to export", "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var textile = GenerateTextileFormat();
+            var dialog = new TextileExportDialog(textile);
+            dialog.ShowDialog();
+        }
+
+        private string GenerateTextileFormat()
+        {
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"h3. {SelectedTable} Data");
+            sb.AppendLine();
+
+            foreach (var record in SqlRecords)
+            {
+                sb.AppendLine($"h4. {record.RecordLabel}");
+                sb.AppendLine();
+
+                // Create a Textile table
+                sb.AppendLine("|_.Field|_.Value|_.Type|_.Description|");
+                foreach (var column in record.Columns)
+                {
+                    var field = EscapeTextile(column.Name);
+                    var value = EscapeTextile(column.DisplayValue);
+                    var type = EscapeTextile(column.Type);
+                    var desc = EscapeTextile(column.Description);
+
+                    sb.AppendLine($"|{field}|{value}|{type}|{desc}|");
+                }
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
+        private static string EscapeTextile(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+
+            // Replace line breaks with space for table cells
+            return text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+        }
 
         partial void OnSelectedTableChanged(string value)
         {

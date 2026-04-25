@@ -7,15 +7,39 @@ namespace LogAnalyzer.Services
 {
     public class SqlParser
     {
-        // Column order for exec InsertAgentCall (positional parameters)
+        // Column order for exec InsertAgentCall — matches stored procedure parameter order exactly:
+        // @userLogin, @callDirection, @callRef, @callQueuesSeqNumber, @callingNumber, @calledNumber,
+        // @calledNumberInCNF, @disconnectReason, @disconnectSource, @startDateTime, @waveFile,
+        // @durationSec, @waitTimeSec, @acceptTimeSec, @trunkNumber, @hotlineNumber,
+        // @initialDialedNumber, @forwardedTo, @acSource, @acCallingNumber, @acCalledNumber,
+        // @partnerUserLogin, @cost, @conferenceId, @mediaType
         public static readonly IReadOnlyList<string> AgentCallColumns = new[]
         {
-            "AgentID", "CallDirection", "CallRef", "CallQueuesSeqNumber", "Supervisors",
-            "CalledNumber", "CalledNumberInCNF", "CallingNumber", "DisconnectReason", "DisconnectSource",
-            "DurationSec", "StartDateTime", "WaveFile", "WaitTimeSec", "AcceptTimeSec",
-            "TrunkNumber", "HotlineNumber", "InitialDialedNumber", "ForwardedTo", "AcSource",
-            "ACCallingNumber", "ACCalledNumber", "PartnerAgentID", "Comment", "HistoryContactId",
-            "Cost", "ConferenceId", "MediaType"
+            "AgentID",              // @userLogin
+            "CallDirection",        // @callDirection
+            "CallRef",              // @callRef
+            "CallQueuesSeqNumber",  // @callQueuesSeqNumber
+            "CallingNumber",        // @callingNumber
+            "CalledNumber",         // @calledNumber
+            "CalledNumberInCNF",    // @calledNumberInCNF
+            "DisconnectReason",     // @disconnectReason
+            "DisconnectSource",     // @disconnectSource
+            "StartDateTime",        // @startDateTime
+            "WaveFile",             // @waveFile
+            "DurationSec",          // @durationSec
+            "WaitTimeSec",          // @waitTimeSec
+            "AcceptTimeSec",        // @acceptTimeSec
+            "TrunkNumber",          // @trunkNumber
+            "HotlineNumber",        // @hotlineNumber
+            "InitialDialedNumber",  // @initialDialedNumber
+            "ForwardedTo",          // @forwardedTo
+            "AcSource",             // @acSource
+            "ACCallingNumber",      // @acCallingNumber
+            "ACCalledNumber",       // @acCalledNumber
+            "PartnerAgentID",       // @partnerUserLogin
+            "Cost",                 // @cost
+            "ConferenceId",         // @conferenceId
+            "MediaType"             // @mediaType
         };
 
         public (string procName, Dictionary<string, string> columns) ParseExecStatement(string sql)

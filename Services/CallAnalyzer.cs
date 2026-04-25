@@ -49,6 +49,41 @@ namespace LogAnalyzer.Services
                 e.Timestamp >= searchStart && e.Timestamp <= searchEnd
             ).OrderBy(e => e.Timestamp).ToList();
 
+            // Extract partner channel IDs from Switch statements
+            var partnerChannelIds = ExtractPartnerChannelIds(matchedEntries);
+
+            // Add traces from partner channels
+            if (partnerChannelIds.Count > 0)
+            {
+                var partnerMatches = new List<LogEntry>();
+                foreach (var partnerId in partnerChannelIds)
+                {
+                    var partnerEntries = allEntries.Where(e =>
+                        e.Message.Contains(partnerId, StringComparison.OrdinalIgnoreCase)
+                    ).ToList();
+
+                    if (partnerEntries.Count > 0)
+                    {
+                        var partnerMinTime = partnerEntries.Min(e => e.Timestamp);
+                        var partnerMaxTime = partnerEntries.Max(e => e.Timestamp);
+
+                        var partnerSearchStart = partnerMinTime.Add(-timeWindowBefore);
+                        var partnerSearchEnd = partnerMaxTime.Add(timeWindowAfter);
+
+                        var partnerWindowEntries = allEntries.Where(e =>
+                            e.Timestamp >= partnerSearchStart && e.Timestamp <= partnerSearchEnd
+                        ).ToList();
+
+                        partnerMatches.AddRange(partnerWindowEntries);
+                    }
+                }
+
+                // Merge and deduplicate entries
+                matchedEntries = matchedEntries.Union(partnerMatches)
+                    .OrderBy(e => e.Timestamp)
+                    .ToList();
+            }
+
             // Collect source files
             foreach (var entry in matchedEntries)
             {
@@ -61,6 +96,28 @@ namespace LogAnalyzer.Services
             return (matchedEntries, callInfo);
         }
 
+        private HashSet<string> ExtractPartnerChannelIds(List<LogEntry> entries)
+        {
+            var partnerIds = new HashSet<string>();
+            var partnerPattern = new Regex(@"Switch\s+ChannelID\s*=\s*[""']?(\d+)[""']?\s+partnerChannelID\s*=\s*[""']?(\d+)[""']?",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+            foreach (var entry in entries)
+            {
+                var match = partnerPattern.Match(entry.Message);
+                if (match.Success)
+                {
+                    var partnerId = match.Groups[2].Value;
+                    if (!string.IsNullOrEmpty(partnerId))
+                    {
+                        partnerIds.Add(partnerId);
+                    }
+                }
+            }
+
+            return partnerIds;
+        }
+
         private CallInfo ExtractCallInfo(List<LogEntry> entries, string callId, HashSet<string> sourceFiles,
             DateTime minMatchTime, DateTime maxMatchTime)
         {
@@ -70,12 +127,9 @@ namespace LogAnalyzer.Services
                 SourceFiles = sourceFiles.OrderBy(f => f).ToList(),
                 StartTime = entries.Count > 0 ? entries.Min(e => e.Timestamp) : null,
                 EndTime = entries.Count > 0 ? entries.Max(e => e.Timestamp) : null
+                // Duration is NOT calculated from log timestamps.
+                // It must come exclusively from the Calls table's Duration column (SQL INSERT).
             };
-
-            if (info.StartTime.HasValue && info.EndTime.HasValue)
-            {
-                info.Duration = (long)(info.EndTime.Value - info.StartTime.Value).TotalMilliseconds;
-            }
 
             // Extract info from SQL INSERT line if present
             var sqlEntry = entries.FirstOrDefault(e =>

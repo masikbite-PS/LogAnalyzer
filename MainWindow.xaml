@@ -68,25 +68,25 @@
                             <TextBlock Text="Call Info" FontWeight="Bold" FontSize="12" Margin="0,0,0,8"/>
 
                             <TextBlock Text="Start Time" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.ServerStartDateTime}" Margin="0,2,0,8" FontFamily="Courier New" FontSize="10"/>
+                            <TextBox Text="{Binding CallInfo.ServerStartDateTime, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontFamily="Courier New" FontSize="10" Background="#F9F9F9"/>
 
                             <TextBlock Text="From" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.CallingNumber}" Margin="0,2,0,8" FontSize="11"/>
+                            <TextBox Text="{Binding CallInfo.CallingNumber, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontSize="11" Background="#F9F9F9"/>
 
                             <TextBlock Text="To" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.CalledNumber}" Margin="0,2,0,8" FontSize="11"/>
+                            <TextBox Text="{Binding CallInfo.CalledNumber, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontSize="11" Background="#F9F9F9"/>
 
                             <TextBlock Text="User" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.UserLogin}" Margin="0,2,0,8" FontSize="11"/>
+                            <TextBox Text="{Binding CallInfo.UserLogin, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontSize="11" Background="#F9F9F9"/>
 
                             <TextBlock Text="Call Type" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.CallTypeName}" Margin="0,2,0,8" FontSize="11"/>
+                            <TextBox Text="{Binding CallInfo.CallTypeName, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontSize="11" Background="#F9F9F9"/>
 
                             <TextBlock Text="Duration" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.Duration, StringFormat={}{0} ms}" Margin="0,2,0,8" FontSize="11"/>
+                            <TextBox Text="{Binding CallInfo.Duration, StringFormat={}{0} ms, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontSize="11" Background="#F9F9F9"/>
 
                             <TextBlock Text="Channel" FontWeight="Bold" FontSize="10" Foreground="#555"/>
-                            <TextBlock Text="{Binding CallInfo.ChannelNumber}" Margin="0,2,0,8"/>
+                            <TextBox Text="{Binding CallInfo.ChannelNumber, Mode=OneWay}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" Background="#F9F9F9"/>
 
                             <TextBlock Text="Partner ID" FontWeight="Bold" FontSize="10" Foreground="#555"/>
                             <TextBox Text="{Binding CallInfo.PartnerPhysicalId}" IsReadOnly="True" Padding="5" Margin="0,2,0,8" FontFamily="Courier New" FontSize="9" Background="#F9F9F9" TextWrapping="Wrap"/>
@@ -95,7 +95,7 @@
                             <ListBox ItemsSource="{Binding CallInfo.SourceFiles}" Height="80">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding}" FontSize="9"/>
+                                        <TextBox Text="{Binding Mode=OneWay}" IsReadOnly="True" Padding="5" FontSize="9" Background="White" BorderThickness="0"/>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
@@ -141,49 +141,59 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="250"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Table:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding SqlDataViewModel.AvailableTables}"
                                   SelectedItem="{Binding SqlDataViewModel.SelectedTable, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Column="3" Content="Export to Textile"
+                                Command="{Binding SqlDataViewModel.ExportToTextileCommand}"
+                                Padding="15,5" Background="#2C5F8A" Foreground="White" FontWeight="Bold"/>
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="10,0,10,0">
-                        <ItemsControl ItemsSource="{Binding SqlDataViewModel.SqlRecords}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="0,0,0,12">
-                                        <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4">
-                                            <TextBlock Text="{Binding RecordLabel}" Foreground="White"
-                                                       FontWeight="Bold" FontSize="11"/>
-                                        </Border>
-                                        <DataGrid ItemsSource="{Binding Columns}" AutoGenerateColumns="False"
-                                                  CanUserAddRows="False" IsReadOnly="True"
-                                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
-                                                  BorderThickness="1" BorderBrush="#CCCCCC"
-                                                  RowBackground="White" AlternatingRowBackground="#F8F8F8">
-                                            <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="160"/>
-                                                <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="220">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="TextWrapping" Value="Wrap"/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
-                                                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="110"/>
-                                                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="TextWrapping" Value="Wrap"/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="10,0,10,0">
+                        <StackPanel x:Name="SqlDataStackPanel">
+                            <ItemsControl ItemsSource="{Binding SqlDataViewModel.SqlRecords}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,12">
+                                            <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4">
+                                                <TextBlock Text="{Binding RecordLabel}" Foreground="White"
+                                                           FontWeight="Bold" FontSize="11"/>
+                                            </Border>
+                                            <DataGrid ItemsSource="{Binding Columns}" AutoGenerateColumns="False"
+                                                      CanUserAddRows="False" IsReadOnly="True"
+                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      BorderThickness="1" BorderBrush="#CCCCCC"
+                                                      RowBackground="White" AlternatingRowBackground="#F8F8F8"
+                                                      MaxHeight="400" MinWidth="800">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="150"/>
+                                                    <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="250">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                                <Setter Property="TextAlignment" Value="Left"/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
+                                                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                                                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="300">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                                <Setter Property="TextAlignment" Value="Left"/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </ScrollViewer>
 
                     <TextBlock Grid.Row="2" Margin="10,4,10,6"
