@@ -6,7 +6,7 @@ namespace LogAnalyzer.Services
 {
     public class LogParser
     {
-        private static readonly Regex LogLineRegex = new(
+        public static readonly Regex LogLineRegex = new(
             @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(\S+)\s+(\w+)\s+(\S+)\s+(.*)",
             RegexOptions.Compiled
         );

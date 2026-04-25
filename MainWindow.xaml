@@ -211,6 +211,67 @@
                                VerticalAlignment="Center" Foreground="#555"/>
                 </Grid>
             </TabItem>
+
+            <!-- Tab 3: SIP Messages -->
+            <TabItem Header="SIP Messages" Padding="10,5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- CallFlow Summary -->
+                    <TextBlock Grid.Row="0" Margin="10,10,10,8" Text="{Binding SipViewModel.CallFlowSummary}"
+                               FontSize="11" FontFamily="Courier New" Foreground="#333" TextWrapping="Wrap"/>
+
+                    <!-- Message List and Details -->
+                    <Grid Grid.Row="1" Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="380"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Message List (DataGrid) -->
+                        <DataGrid Grid.Column="0" ItemsSource="{Binding SipViewModel.SipMessages}"
+                                  SelectedItem="{Binding SipViewModel.SelectedMessage}"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                  BorderThickness="1" BorderBrush="#CCCCCC"
+                                  RowBackground="White" AlternatingRowBackground="#F8F8F8">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding SequenceNumber}" Width="35"/>
+                                <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat=HH:mm:ss.fff}" Width="90"/>
+                                <DataGridTextColumn Header="Dir" Binding="{Binding Direction}" Width="35">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextAlignment" Value="Center"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Method" Binding="{Binding SipMethod}" Width="80"/>
+                                <DataGridTextColumn Header="Call-ID" Binding="{Binding CallId}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E0E0E0"/>
+
+                        <!-- Message Details (RawBody) -->
+                        <TextBox Grid.Column="2" IsReadOnly="True" FontFamily="Courier New" FontSize="10"
+                                 TextWrapping="Wrap" Padding="10"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 Text="{Binding SipViewModel.SelectedMessage.RawBody, Mode=OneWay}"
+                                 Background="#F9F9F9" BorderThickness="1" BorderBrush="#CCCCCC"/>
+                    </Grid>
+
+                    <!-- Status -->
+                    <TextBlock Grid.Row="2" Margin="10,4,10,6"
+                               Text="{Binding SipViewModel.StatusMessage}"
+                               VerticalAlignment="Center" Foreground="#555"/>
+                </Grid>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

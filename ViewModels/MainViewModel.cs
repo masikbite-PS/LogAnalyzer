@@ -54,6 +54,8 @@ namespace LogAnalyzer.ViewModels
 
         public SqlDataViewModel SqlDataViewModel { get; } = new();
 
+        public SipViewModel SipViewModel { get; } = new();
+
         [RelayCommand]
         private void SelectPbxFolder()
         {
@@ -126,6 +128,19 @@ namespace LogAnalyzer.ViewModels
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);
+                }
+
+                // Parse SIP messages
+                if (!string.IsNullOrWhiteSpace(SipFolderPath))
+                {
+                    StatusMessage = "Parsing SIP messages...";
+                    var sipParser = new SipLogParser();
+                    var sipMessages = await sipParser.ParseAsync(SipFolderPath, progress);
+                    SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerPhysicalId);
+                }
+                else
+                {
+                    SipViewModel.SetData(new(), CallId, callInfo.PartnerPhysicalId);
                 }
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
