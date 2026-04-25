@@ -1,0 +1,22 @@
+h1. AgentServices
+
+p(. This table contains information about the services that were assigned and unassigned to the user during the login session.
+
+h2. Columns
+
+table{background:#F5F5F5;margin-left:2em}.
+{background:#666666}. |{color:white}. *Name*|{color:white}. *Type*|{color:white}. *Null*|{color:white}. *Key*|{color:white}. *Default*|{color:white}. *Description*|
+|SessionId|uniqueidentifier||PK||The unique identifier of the login session.|
+|SeqNumber|int||PK||The sequence number of the event within the current login session.|
+|EventTime|datetime||||The time when the event occurred.|
+|EventType|int||||The event type: _0 — SignIn_; _1 — SignOut_.|
+|ServiceNumber|varchar(64)||||The number of the service the agent is signed in/out.|
+
+h2. Description
+
+p(. Fixed services are always assigned on login. Hotline assigning depends on the type of login and the tool that is used to log in a user.
+Every *SignIn* event must have a corresponding *SignOut* event within the single logon session.
+
+h2. See also
+
+p(. [[DB_DIVOS_STATISTIK_2026_0_AgentStates|AgentStates]], [[DB_DIVOS_STATISTIK_2026_0_UserBindingDevice|UserBindingDevice]], [[DB_DIVOS_STATISTIK_2026_0_AgentCalls|AgentCalls]], [[DB_DIVOS_STATISTIK_2026_0_AgentLogins|AgentLogins]].

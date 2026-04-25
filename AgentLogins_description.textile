@@ -1,0 +1,15 @@
+h1. AgentLogins
+
+h2. Columns
+
+table{background:#F5F5F5;margin-left:2em}.
+{background:#666666}. |{color:white}. *Name*|{color:white}. *Type*|{color:white}. *Null*|{color:white}. *Key*|{color:white}. *Default*|{color:white}. *Description*|
+|SessionId|uniqueidentifier||PK||The unique identifier of the login session.|
+|UserLogin|varchar(64)||||The user login.|
+|LoginTime|datetime||||The time when the *login* state started.|
+|ServerStartDateTime|datetime||||The time when the call started to be related to the specified queue. In local time of server.|
+|ConnectionId|varchar(64)||||A connection string of the program that initiated the login.|
+
+h2. See also
+
+p(. [[DB_DIVOS_STATISTIK_2026_0_AgentStates|AgentStates]], [[DB_DIVOS_STATISTIK_2026_0_AgentServices|AgentServices]], [[DB_DIVOS_STATISTIK_2026_0_AgentCalls|AgentCalls]], [[DB_DIVOS_STATISTIK_2026_0_UserBindingDevice|UserBindingDevice]].

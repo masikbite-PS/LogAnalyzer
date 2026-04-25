@@ -14,9 +14,14 @@ namespace LogAnalyzer.Services
         // Maps table name → .md filename stem (without _table_reference.md)
         private static readonly Dictionary<string, string> TableFileMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "Calls",       "Calls_table_reference" },
-            { "CallsQueues", "CallsQueues_table_reference" },
-            { "AgentCalls",  "AgentCalls_table_reference" }
+            { "Calls",              "Calls_table_reference" },
+            { "CallsQueues",        "CallsQueues_table_reference" },
+            { "AgentCalls",         "AgentCalls_table_reference" },
+            { "PhysicalCalls",      "PhysicalCalls_table_reference" },
+            { "AgentLogins",        "AgentLogins_table_reference" },
+            { "AgentStates",        "AgentStates_table_reference" },
+            { "AgentServices",      "AgentServices_table_reference" },
+            { "UserBindingDevice",  "UserBindingDevice_table_reference" }
         };
 
         public void LoadDefinitions()

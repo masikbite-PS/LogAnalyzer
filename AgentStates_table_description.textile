@@ -1,0 +1,44 @@
+h1. AgentStates
+
+p(. Users can be in various states during the working process. The information about these states is written to this table.
+
+h2. Columns
+
+table{background:#F5F5F5;margin-left:2em}.
+{background:#666666}. |{color:white}. *Name*|{color:white}. *Type*|{color:white}. *Null*|{color:white}. *Key*|{color:white}. *Default*|{color:white}. *Description*|
+|SessionId|uniqueidentifier||PK||The unique identifier of the login session.|
+|SeqNumber|int||PK||The sequence number of the event within the current login session.|
+|StartTime|datetime||||The time when the state started.|
+|ServerStartDateTime|datetime||||The time when the call started to be related to the specified queue. In local time of server.|
+|StateType|int||||The state type.|
+|ActionReason|int|YES||null|Contains the break reason number for the break state or the logout reason for the logout action.|
+
+
+h2. Description
+
+p(. The state duration is not written and can be calculated as the difference between the current and the next state transitions. The entry is written on the state started. Writing of the duration of the state requires that the record is written at the end of the state. This could cause problems with calculating the last user state duration. So this scheme was rejected.
+
+p(. There are the following types of states:
+
+* 1 — Ready
+* 2 — Busy
+* 3 — AWT
+* 4 — Break
+* 5 — LoggedOff
+
+p(. Standard logout reasons:
+
+* 0 — The manual logout by the user.
+* 1 — The ringing timeout exceeded - value is set by a config parameter *Agent.SystemTimeoutLogoutReason*.
+* 2 — Another user is logged in on the same channel or the same user is logged in from the other client.
+* 3 — CTI connection is lost.
+* 4 — The PBX server is shut down.
+* 5 — Another user is logged in on the same channel via the @9#00@ command.
+* 6 — Unsuccessful binding on login.
+* 7 — The group logout is activated according to the schedule.
+* 8 — The AWT timeout fired.
+* 9 — The user was removed.
+
+h2. See also
+
+p(. [[DB_DIVOS_STATISTIK_2026_0_AgentServices|AgentServices]], [[DB_DIVOS_STATISTIK_2026_0_UserBindingDevice|UserBindingDevice]], [[DB_DIVOS_STATISTIK_2026_0_AgentCalls|AgentCalls]], [[DB_DIVOS_STATISTIK_2026_0_AgentLogins|AgentLogins]].

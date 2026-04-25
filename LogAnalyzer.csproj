@@ -22,6 +22,11 @@
     <EmbeddedResource Include="Data\Calls_table_reference.md" />
     <EmbeddedResource Include="Data\CallsQueues_table_reference.md" />
     <EmbeddedResource Include="Data\AgentCalls_table_reference.md" />
+    <EmbeddedResource Include="Data\PhysicalCalls_table_reference.md" />
+    <EmbeddedResource Include="Data\AgentLogins_table_reference.md" />
+    <EmbeddedResource Include="Data\AgentStates_table_reference.md" />
+    <EmbeddedResource Include="Data\AgentServices_table_reference.md" />
+    <EmbeddedResource Include="Data\UserBindingDevice_table_reference.md" />
     <Resource Include="Data\loganalyzer_icon.png" />
   </ItemGroup>
 

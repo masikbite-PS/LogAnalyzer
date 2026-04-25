@@ -6,14 +6,14 @@
         xmlns:local="clr-namespace:LogAnalyzer"
         xmlns:converters="clr-namespace:LogAnalyzer.Converters"
         mc:Ignorable="d"
-        Title="PBX Log Analyzer" Height="750" Width="1400" WindowStartupLocation="CenterScreen"
+        Title="PBX Log Analyzer" Height="900" Width="1600" WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/Data/loganalyzer_icon.png">
     <Window.Resources>
         <converters:DurationConverter x:Key="DurationConverter"/>
     </Window.Resources>
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Margin="10">
-            <TextBlock Text="PBX Log Analyzer" FontSize="16" FontWeight="Bold"/>
+            <TextBlock Text="PBX Log Analyzer" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -41,14 +41,14 @@
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Bottom" Margin="10" Background="#F5F5F5">
-            <ProgressBar Height="20" Value="{Binding ProgressValue}" Maximum="100"/>
+            <ProgressBar Height="20" Value="{Binding ProgressValue}" Maximum="100" Margin="0,0,0,8"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="Export" Command="{Binding ExportLogsCommand}" Padding="15,5"/>
+                <Button Grid.Column="1" Content="Export" Command="{Binding ExportLogsCommand}" Padding="15,5" Margin="10,0,0,0"/>
             </Grid>
         </StackPanel>
 
@@ -106,23 +106,24 @@
                     <ListBox Grid.Column="2" ItemsSource="{Binding LogEntries}" Margin="10" FontFamily="Courier New" FontSize="10">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" Margin="0,2">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
+                                <TextBox Text="{Binding Mode=OneWay}" Margin="0,2" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Foreground" Value="#000000"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Level}" Value="Debug">
-                                                    <Setter Property="TextBlock.Foreground" Value="#808080"/>
+                                                    <Setter Property="TextBox.Foreground" Value="#808080"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Warning">
-                                                    <Setter Property="TextBlock.Foreground" Value="#FF8C00"/>
+                                                    <Setter Property="TextBox.Foreground" Value="#FF8C00"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Error">
-                                                    <Setter Property="TextBlock.Foreground" Value="#FF0000"/>
+                                                    <Setter Property="TextBox.Foreground" Value="#FF0000"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                    </TextBox.Style>
+                                </TextBox>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -153,48 +154,56 @@
                                 Padding="15,5" Background="#2C5F8A" Foreground="White" FontWeight="Bold"/>
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="10,0,10,0">
-                        <StackPanel x:Name="SqlDataStackPanel">
-                            <ItemsControl ItemsSource="{Binding SqlDataViewModel.SqlRecords}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Margin="0,0,0,12">
-                                            <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4">
-                                                <TextBlock Text="{Binding RecordLabel}" Foreground="White"
-                                                           FontWeight="Bold" FontSize="11"/>
-                                            </Border>
-                                            <DataGrid ItemsSource="{Binding Columns}" AutoGenerateColumns="False"
-                                                      CanUserAddRows="False" IsReadOnly="True"
-                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
-                                                      BorderThickness="1" BorderBrush="#CCCCCC"
-                                                      RowBackground="White" AlternatingRowBackground="#F8F8F8"
-                                                      MaxHeight="400" MinWidth="800">
-                                                <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="150"/>
-                                                    <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="250">
-                                                        <DataGridTextColumn.ElementStyle>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="TextWrapping" Value="Wrap"/>
-                                                                <Setter Property="TextAlignment" Value="Left"/>
-                                                            </Style>
-                                                        </DataGridTextColumn.ElementStyle>
-                                                    </DataGridTextColumn>
-                                                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
-                                                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="300">
-                                                        <DataGridTextColumn.ElementStyle>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="TextWrapping" Value="Wrap"/>
-                                                                <Setter Property="TextAlignment" Value="Left"/>
-                                                            </Style>
-                                                        </DataGridTextColumn.ElementStyle>
-                                                    </DataGridTextColumn>
-                                                </DataGrid.Columns>
-                                            </DataGrid>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                    <ScrollViewer Name="SqlDataScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                        <ItemsControl ItemsSource="{Binding SqlDataViewModel.SqlRecords}" Margin="10,0,10,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Vertical"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,12">
+                                        <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4" Margin="0,0,0,4">
+                                            <TextBlock Text="{Binding RecordLabel}" Foreground="White"
+                                                       FontWeight="Bold" FontSize="11"/>
+                                        </Border>
+                                        <DataGrid ItemsSource="{Binding Columns}" AutoGenerateColumns="False"
+                                                  CanUserAddRows="False" IsReadOnly="True"
+                                                  SelectionUnit="Cell"
+                                                  SelectionMode="Extended"
+                                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                  BorderThickness="1" BorderBrush="#CCCCCC"
+                                                  RowBackground="White" AlternatingRowBackground="#F8F8F8"
+                                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="150"/>
+                                                <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="255">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                                            <Setter Property="TextAlignment" Value="Left"/>
+                                                            <Setter Property="Padding" Value="5"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="80"/>
+                                                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                                            <Setter Property="TextAlignment" Value="Left"/>
+                                                            <Setter Property="Padding" Value="5"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </ScrollViewer>
 
                     <TextBlock Grid.Row="2" Margin="10,4,10,6"

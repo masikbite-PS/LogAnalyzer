@@ -115,7 +115,6 @@ namespace LogAnalyzer.ViewModels
                 // Scan all files
                 var allEntries = await _scanner.ScanFilesAsync(allFiles, progress, _cancellationTokenSource.Token);
                 _allScannedEntries = allEntries;
-                SqlDataViewModel.SetData(allEntries, CallId);
 
                 StatusMessage = $"Scanning complete. Analyzing call {CallId}...";
 
@@ -123,6 +122,7 @@ namespace LogAnalyzer.ViewModels
                 var (filteredEntries, callInfo) = _analyzer.AnalyzeCall(allEntries, CallId);
 
                 CallInfo = callInfo;
+                SqlDataViewModel.SetData(allEntries, CallId, callInfo.PartnerPhysicalId ?? "");
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);

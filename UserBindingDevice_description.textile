@@ -1,0 +1,28 @@
+h1. UserBindingDevice
+
+h2. Columns
+
+table{background:#F5F5F5;margin-left:2em}.
+{background:#666666}. |{color:white}. *Name*|{color:white}. *Type*|{color:white}. *Null*|{color:white}. *Key*|{color:white}. *Default*|{color:white}. *Description*|
+|SessionId|uniqueidentifier||PK||The unique identifier of the login session.|
+|SeqNumber|int||||The sequence number of the event within the current login session.|
+|ActionTime|datetime||||The time when the bind/unbind action occurred.|
+|ActionType|int||||The type of binding action.|
+|ChannelNumber|int|YES||null|The channel number assigned to the agent if the agent is bind channel (logged in  as “external phone” or “BISP”, and null if as dial-in or out of office).|
+|RemotePhone|varchar(64)|YES||null|The remote phone number if the agent is bind phone not from this PBX (logged in as out of office, and null if as dial-in, or “external phone”, or “BISP”).|
+|LineId|int|YES||null|The line identifier.|
+
+h2. Description
+
+p(. There are the following types of *ActionType*:
+
+* 0 — Unbind the device
+* 1 — Bind internal phone
+* 2 — Bind device using DialIn
+* 3 — Bind external phone
+* 4 — Bind Microsoft Teams
+
+
+h2. See also
+
+p(. [[DB_DIVOS_STATISTIK_2026_0_AgentStates|AgentStates]], [[DB_DIVOS_STATISTIK_2026_0_AgentServices|AgentServices]], [[DB_DIVOS_STATISTIK_2026_0_AgentCalls|AgentCalls]], [[DB_DIVOS_STATISTIK_2026_0_AgentLogins|AgentLogins]].

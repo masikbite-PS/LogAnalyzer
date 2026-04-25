@@ -22,6 +22,7 @@ namespace LogAnalyzer.ViewModels
     public class SqlRecord
     {
         public string RecordLabel { get; set; } = string.Empty;
+        public string TableName { get; set; } = string.Empty;
         public ObservableCollection<SqlDataColumn> Columns { get; set; } = new();
     }
 
@@ -31,6 +32,7 @@ namespace LogAnalyzer.ViewModels
         private readonly TableDefinitionService _tableService = new();
         private List<LogEntry> _allEntries = new();
         private string _searchCallId = string.Empty;
+        private string _partnerPhysicalId = string.Empty;
 
         [ObservableProperty]
         private ObservableCollection<string> availableTables = new();
@@ -107,10 +109,11 @@ namespace LogAnalyzer.ViewModels
             RefreshTableList();
         }
 
-        public void SetData(List<LogEntry> entries, string callId)
+        public void SetData(List<LogEntry> entries, string callId, string partnerPhysicalId = "")
         {
             _allEntries = entries;
             _searchCallId = callId;
+            _partnerPhysicalId = partnerPhysicalId;
             RefreshTableData();
         }
 
@@ -140,6 +143,16 @@ namespace LogAnalyzer.ViewModels
                 LoadCallsQueuesRecords();
             else if (SelectedTable.Equals("AgentCalls", StringComparison.OrdinalIgnoreCase))
                 LoadAgentCallsRecords();
+            else if (SelectedTable.Equals("PhysicalCalls", StringComparison.OrdinalIgnoreCase))
+                LoadPhysicalCallsRecords();
+            else if (SelectedTable.Equals("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                LoadAgentLoginsRecords();
+            else if (SelectedTable.Equals("AgentStates", StringComparison.OrdinalIgnoreCase))
+                LoadAgentStatesRecords();
+            else if (SelectedTable.Equals("AgentServices", StringComparison.OrdinalIgnoreCase))
+                LoadAgentServicesRecords();
+            else if (SelectedTable.Equals("UserBindingDevice", StringComparison.OrdinalIgnoreCase))
+                LoadUserBindingDeviceRecords();
             else
                 LoadGenericRecords();
         }
@@ -160,7 +173,7 @@ namespace LogAnalyzer.ViewModels
                     !id.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var record = new SqlRecord { RecordLabel = $"Calls — Id: {id}" };
+                var record = new SqlRecord { RecordLabel = $"Calls — Id: {id}", TableName = "Calls" };
                 record.Columns = BuildColumns("Calls", columns);
                 SqlRecords.Add(record);
 
@@ -189,7 +202,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 var seqNum = columns.TryGetValue("SeqNumber", out var seq) ? seq : count.ToString();
-                var record = new SqlRecord { RecordLabel = $"CallsQueues — Seq #{seqNum}" };
+                var record = new SqlRecord { RecordLabel = $"CallsQueues — Seq #{seqNum}", TableName = "CallsQueues" };
                 record.Columns = BuildColumns("CallsQueues", columns);
                 SqlRecords.Add(record);
                 count++;
@@ -217,7 +230,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 var agentId = columns.TryGetValue("AgentID", out var aid) ? aid : count.ToString();
-                var record = new SqlRecord { RecordLabel = $"AgentCalls — Agent: {agentId}" };
+                var record = new SqlRecord { RecordLabel = $"AgentCalls — Agent: {agentId}", TableName = "AgentCalls" };
                 record.Columns = BuildColumns("AgentCalls", columns);
                 SqlRecords.Add(record);
                 count++;
@@ -226,6 +239,378 @@ namespace LogAnalyzer.ViewModels
             StatusMessage = count > 0
                 ? $"Found {count} AgentCalls record(s)"
                 : "No AgentCalls records found for this CallID";
+        }
+
+        private void LoadPhysicalCallsRecords()
+        {
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("insert into PhysicalCalls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (tableName, columns) = _sqlParser.ParseInsertStatement(entry.Message);
+                if (!tableName.Equals("PhysicalCalls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Filter by InitialCallId (= SearchCallID) or Id (= PartnerID)
+                bool matchesSearchCallId = false;
+                if (columns.TryGetValue("InitialCallId", out var initialCallId) &&
+                    initialCallId.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchesSearchCallId = true;
+                }
+
+                bool matchesPartnerId = false;
+                if (!string.IsNullOrEmpty(_partnerPhysicalId) &&
+                    columns.TryGetValue("Id", out var id) &&
+                    id.Equals(_partnerPhysicalId, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchesPartnerId = true;
+                }
+
+                if (!matchesSearchCallId && !matchesPartnerId)
+                    continue;
+
+                var label = columns.TryGetValue("Id", out var physicalId) ? physicalId : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"PhysicalCalls — Id: {label}", TableName = "PhysicalCalls" };
+                record.Columns = BuildColumns("PhysicalCalls", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} PhysicalCalls record(s)"
+                : "No PhysicalCalls records found for this CallID or PartnerID";
+        }
+
+        private void LoadAgentLoginsRecords()
+        {
+            var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (procName, columns) = _sqlParser.ParseExecStatement(entry.Message);
+                if (!procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (columns.TryGetValue("CallRef", out var callRef) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
+                    columns.TryGetValue("AgentID", out var agentId))
+                {
+                    agentIds.Add(agentId);
+                }
+            }
+
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentLogin", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (!columns.TryGetValue("UserLogin", out var userLogin) ||
+                    !agentIds.Contains(userLogin))
+                    continue;
+
+                var sessionId = columns.TryGetValue("SessionId", out var sid) ? sid : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"AgentLogins — Session: {sessionId}", TableName = "AgentLogins" };
+                record.Columns = BuildColumns("AgentLogins", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} AgentLogins record(s)"
+                : "No AgentLogins records found for this CallID's agents";
+        }
+
+        private void LoadAgentStatesRecords()
+        {
+            var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (procName, columns) = _sqlParser.ParseExecStatement(entry.Message);
+                if (!procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (columns.TryGetValue("CallRef", out var callRef) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
+                    columns.TryGetValue("AgentID", out var agentId))
+                {
+                    agentIds.Add(agentId);
+                }
+            }
+
+            var sessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentLogin", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (columns.TryGetValue("UserLogin", out var userLogin) &&
+                    agentIds.Contains(userLogin) &&
+                    columns.TryGetValue("SessionId", out var sessionId))
+                {
+                    sessionIds.Add(sessionId);
+                }
+            }
+
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentStates", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentStates", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentState", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (!columns.TryGetValue("SessionId", out var sessionId) ||
+                    !sessionIds.Contains(sessionId))
+                    continue;
+
+                var stateType = columns.TryGetValue("StateType", out var st) ? st : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"AgentStates — State: {stateType}", TableName = "AgentStates" };
+                record.Columns = BuildColumns("AgentStates", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} AgentStates record(s)"
+                : "No AgentStates records found for this CallID's agent sessions";
+        }
+
+        private void LoadAgentServicesRecords()
+        {
+            var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (procName, columns) = _sqlParser.ParseExecStatement(entry.Message);
+                if (!procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (columns.TryGetValue("CallRef", out var callRef) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
+                    columns.TryGetValue("AgentID", out var agentId))
+                {
+                    agentIds.Add(agentId);
+                }
+            }
+
+            var sessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentLogin", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (columns.TryGetValue("UserLogin", out var userLogin) &&
+                    agentIds.Contains(userLogin) &&
+                    columns.TryGetValue("SessionId", out var sessionId))
+                {
+                    sessionIds.Add(sessionId);
+                }
+            }
+
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentServices", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentServices", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentService", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (!columns.TryGetValue("SessionId", out var sessionId) ||
+                    !sessionIds.Contains(sessionId))
+                    continue;
+
+                var serviceNum = columns.TryGetValue("ServiceNumber", out var sn) ? sn : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"AgentServices — Service: {serviceNum}", TableName = "AgentServices" };
+                record.Columns = BuildColumns("AgentServices", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} AgentServices record(s)"
+                : "No AgentServices records found for this CallID's agent sessions";
+        }
+
+        private void LoadUserBindingDeviceRecords()
+        {
+            var agentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var (procName, columns) = _sqlParser.ParseExecStatement(entry.Message);
+                if (!procName.Equals("InsertAgentCall", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (columns.TryGetValue("CallRef", out var callRef) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
+                    columns.TryGetValue("AgentID", out var agentId))
+                {
+                    agentIds.Add(agentId);
+                }
+            }
+
+            var sessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("AgentLogins", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertAgentLogin", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (columns.TryGetValue("UserLogin", out var userLogin) &&
+                    agentIds.Contains(userLogin) &&
+                    columns.TryGetValue("SessionId", out var sessionId))
+                {
+                    sessionIds.Add(sessionId);
+                }
+            }
+
+            int count = 0;
+            foreach (var entry in _allEntries)
+            {
+                if (!entry.Message.Contains("UserBindingDevice", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Dictionary<string, string> columns;
+                if (entry.Message.Contains("insert into", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (tableName, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                    if (!tableName.Equals("UserBindingDevice", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+                else
+                {
+                    var (procName, cols) = _sqlParser.ParseExecStatement(entry.Message);
+                    if (!procName.Equals("InsertUserBindingDevice", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    columns = cols;
+                }
+
+                if (!columns.TryGetValue("SessionId", out var sessionId) ||
+                    !sessionIds.Contains(sessionId))
+                    continue;
+
+                var actionType = columns.TryGetValue("ActionType", out var at) ? at : count.ToString();
+                var record = new SqlRecord { RecordLabel = $"UserBindingDevice — Action: {actionType}", TableName = "UserBindingDevice" };
+                record.Columns = BuildColumns("UserBindingDevice", columns);
+                SqlRecords.Add(record);
+                count++;
+            }
+
+            StatusMessage = count > 0
+                ? $"Found {count} UserBindingDevice record(s)"
+                : "No UserBindingDevice records found for this CallID's agent sessions";
         }
 
         private void LoadGenericRecords()
@@ -240,7 +625,7 @@ namespace LogAnalyzer.ViewModels
                 if (!tableName.Equals(SelectedTable, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var record = new SqlRecord { RecordLabel = $"{SelectedTable} #{count}" };
+                var record = new SqlRecord { RecordLabel = $"{SelectedTable} #{count}", TableName = SelectedTable };
                 record.Columns = BuildColumns(SelectedTable, columns);
                 SqlRecords.Add(record);
                 count++;
