@@ -216,48 +216,70 @@
             <TabItem Header="SIP Messages" Padding="10,5">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- CallFlow Summary -->
-                    <TextBlock Grid.Row="0" Margin="10,10,10,8" Text="{Binding SipViewModel.CallFlowSummary}"
-                               FontSize="11" FontFamily="Courier New" Foreground="#333" TextWrapping="Wrap"/>
-
-                    <!-- Message List and Details -->
-                    <Grid Grid.Row="1" Margin="10">
+                    <!-- Message List (grouped by Call-ID) and Details -->
+                    <Grid Grid.Row="0" Margin="10">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="380"/>
-                            <ColumnDefinition Width="5"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="400"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Message List (DataGrid) -->
-                        <DataGrid Grid.Column="0" ItemsSource="{Binding SipViewModel.SipMessages}"
-                                  SelectedItem="{Binding SipViewModel.SelectedMessage}"
-                                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
-                                  BorderThickness="1" BorderBrush="#CCCCCC"
-                                  RowBackground="White" AlternatingRowBackground="#F8F8F8">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="#" Binding="{Binding SequenceNumber}" Width="35"/>
-                                <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat=HH:mm:ss.fff}" Width="90"/>
-                                <DataGridTextColumn Header="Dir" Binding="{Binding Direction}" Width="35">
-                                    <DataGridTextColumn.ElementStyle>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="TextAlignment" Value="Center"/>
-                                        </Style>
-                                    </DataGridTextColumn.ElementStyle>
-                                </DataGridTextColumn>
-                                <DataGridTextColumn Header="Method" Binding="{Binding SipMethod}" Width="80"/>
-                                <DataGridTextColumn Header="Call-ID" Binding="{Binding CallId}" Width="*"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <!-- Left: Grouped Message List -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                            <ItemsControl ItemsSource="{Binding SipViewModel.SipFlowGroups}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,12">
+                                            <!-- Group Header -->
+                                            <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4" Margin="0,0,0,4">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding ShortCallId}" Foreground="White"
+                                                               FontWeight="Bold" FontSize="11"/>
+                                                    <TextBlock Text="{Binding FlowSummary}" Foreground="#C8DCF0"
+                                                               FontSize="10" FontFamily="Courier New" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Messages DataGrid -->
+                                            <DataGrid ItemsSource="{Binding Messages}"
+                                                      SelectionChanged="SipDataGrid_SelectionChanged"
+                                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      BorderThickness="1" BorderBrush="#CCCCCC"
+                                                      RowBackground="White" AlternatingRowBackground="#F8F8F8"
+                                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="#" Binding="{Binding SequenceNumber}" Width="35"/>
+                                                    <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat=HH:mm:ss.fff}" Width="90"/>
+                                                    <DataGridTextColumn Header="Dir" Binding="{Binding Direction}" Width="55">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="TextAlignment" Value="Center"/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
+                                                    <DataGridTextColumn Header="Method" Binding="{Binding SipMethod}" Width="*"/>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
 
                         <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E0E0E0"/>
 
-                        <!-- Message Details (RawBody) -->
+                        <!-- Right: Message Details (RawBody) -->
                         <TextBox Grid.Column="2" IsReadOnly="True" FontFamily="Courier New" FontSize="10"
                                  TextWrapping="Wrap" Padding="10"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -267,7 +289,7 @@
                     </Grid>
 
                     <!-- Status -->
-                    <TextBlock Grid.Row="2" Margin="10,4,10,6"
+                    <TextBlock Grid.Row="1" Margin="10,4,10,6"
                                Text="{Binding SipViewModel.StatusMessage}"
                                VerticalAlignment="Center" Foreground="#555"/>
                 </Grid>
