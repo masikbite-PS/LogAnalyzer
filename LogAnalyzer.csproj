@@ -11,6 +11,7 @@
     <FileVersion>1.2.0</FileVersion>
     <Product>PBX Log Analyzer</Product>
     <Company>masikbite-PS</Company>
+    <ApplicationIcon>loganalyzer_icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
