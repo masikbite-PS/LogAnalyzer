@@ -22,6 +22,18 @@ namespace LogAnalyzer.Services
                 return table;
 
             var lines = File.ReadAllLines(filePath);
+            return ParseLines(lines, tableName, displayName);
+        }
+
+        public TableDefinition ParseContent(string content, string tableName, string displayName)
+        {
+            var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            return ParseLines(lines, tableName, displayName);
+        }
+
+        private TableDefinition ParseLines(string[] lines, string tableName, string displayName)
+        {
+            var table = new TableDefinition { Name = tableName, DisplayName = displayName };
             int nameIdx = -1, typeIdx = -1, descIdx = -1;
             bool headerFound = false;
 
@@ -44,7 +56,6 @@ namespace LogAnalyzer.Services
                     continue;
                 }
 
-                // Skip separator rows like |---|---|
                 if (cells.All(c => Regex.IsMatch(c.Trim(), @"^[-: ]+$")))
                     continue;
 

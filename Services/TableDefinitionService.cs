@@ -21,15 +21,20 @@ namespace LogAnalyzer.Services
 
         public void LoadDefinitions()
         {
-            var assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            var appDir = Path.GetDirectoryName(assemblyPath) ?? ".";
-            var dataDir = Path.Combine(appDir, "Data");
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
 
             foreach (var (tableName, fileStem) in TableFileMap)
             {
-                var filePath = Path.Combine(dataDir, fileStem + ".md");
-                var table = _parser.ParseFile(filePath, tableName, tableName);
-                _tableDefinitions[tableName] = table;
+                var resourceName = $"LogAnalyzer.Data.{fileStem}.md";
+                var stream = assembly.GetManifestResourceStream(resourceName);
+
+                if (stream != null)
+                {
+                    using var reader = new StreamReader(stream);
+                    var content = reader.ReadToEnd();
+                    var table = _parser.ParseContent(content, tableName, tableName);
+                    _tableDefinitions[tableName] = table;
+                }
             }
         }
 
