@@ -10,10 +10,14 @@ namespace LogAnalyzer.Models
         public string Component { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public string SourceFile { get; set; } = string.Empty;
+        public string SipRawBody { get; set; } = string.Empty;
 
         public override string ToString()
         {
-            return $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
+            var logLine = $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
+            if (!string.IsNullOrWhiteSpace(SipRawBody))
+                logLine += $"\n{SipRawBody}";
+            return logLine;
         }
     }
 }

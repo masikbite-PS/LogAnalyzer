@@ -103,10 +103,10 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <ListBox Grid.Column="2" ItemsSource="{Binding LogEntries}" Margin="10" FontFamily="Courier New" FontSize="10">
+                    <ListBox Grid.Column="2" ItemsSource="{Binding LogEntries}" Margin="10" FontFamily="Courier New" FontSize="9">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBox Text="{Binding Mode=OneWay}" Margin="0,2" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0">
+                                <TextBox Text="{Binding Mode=OneWay}" Margin="0,0" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0" AcceptsReturn="True">
                                     <TextBox.Style>
                                         <Style TargetType="TextBox">
                                             <Setter Property="Foreground" Value="#000000"/>
