@@ -41,8 +41,9 @@ public class SipCallFlowDiagramBuilder
         // Build message lines
         foreach (var msg in msgList)
         {
+            var time = msg.Timestamp.ToString("HH:mm:ss");
             sb.AppendLine(BuildMessageLine(msg, leftParticipant, rightParticipant));
-            sb.AppendLine(BuildIdleLine());
+            sb.AppendLine(BuildIdleLine(time));
         }
 
         return sb.ToString().TrimEnd();
@@ -67,12 +68,12 @@ public class SipCallFlowDiagramBuilder
         return $"{left}{center}{right}";
     }
 
-    private string BuildIdleLine()
+    private string BuildIdleLine(string timePrefix = "        ")
     {
         var left = " ".PadRight(ColumnWidth - 1) + "|";
         var center = " ".PadRight(ColumnWidth - 1) + "|";
         var right = " ".PadRight(ColumnWidth - 1) + "|";
-        return $"{left}{center}{right}";
+        return $"{timePrefix}{left}{center}{right}";
     }
 
     private string BuildMessageLine(SipMessage msg, string leftParticipant, string? rightParticipant)
@@ -144,12 +145,12 @@ public class SipCallFlowDiagramBuilder
 
         if (rightward)
         {
-            var remaining = totalDashes - half - 1;
+            var remaining = totalDashes - half;
             return new string('-', half) + $" {label} " + new string('-', remaining) + ">";
         }
         else
         {
-            var remaining = totalDashes - half - 1;
+            var remaining = totalDashes - half;
             return "<" + new string('-', half) + $" {label} " + new string('-', remaining);
         }
     }
