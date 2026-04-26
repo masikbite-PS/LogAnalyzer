@@ -8,8 +8,10 @@ namespace LogAnalyzer.Services;
 
 public class SipCallFlowDiagramBuilder
 {
-    private const int ColumnWidth = 24;
-    private const int InnerWidth = ColumnWidth - 2;
+    private const int TimeWidth = 18;
+    private const int FromWidth = 18;
+    private const int ToWidth = 18;
+    private const int MessageWidth = 14;
 
     public string Build(IEnumerable<SipMessage> messages)
     {
@@ -17,152 +19,54 @@ public class SipCallFlowDiagramBuilder
         if (msgList.Count == 0)
             return "";
 
-        // Identify participants
-        var uniqueAddresses = msgList
-            .Select(m => m.RemoteAddress)
-            .Where(a => !string.IsNullOrWhiteSpace(a))
-            .Distinct()
-            .OrderBy(a => msgList.First(m => m.RemoteAddress == a).Timestamp)
-            .ToList();
-
-        if (uniqueAddresses.Count == 0)
-            return "";
-
-        var leftParticipant = uniqueAddresses.ElementAtOrDefault(0) ?? "Caller";
-        var rightParticipant = uniqueAddresses.ElementAtOrDefault(1);
-        var hasRight = rightParticipant != null;
-
         var sb = new StringBuilder();
 
-        // Build header
-        sb.AppendLine(BuildHeaderLine(leftParticipant, "PBX", rightParticipant));
-        sb.AppendLine(BuildSeparatorLine());
+        sb.AppendLine("Merged Call Flow with Session Details");
+        sb.AppendLine(new string('═', TimeWidth + FromWidth + ToWidth + MessageWidth + 50));
+        sb.AppendLine($"{"Time".PadRight(TimeWidth)}{"From".PadRight(FromWidth)}{"To".PadRight(ToWidth)}{"Message".PadRight(MessageWidth)}{"SDP"}");
+        sb.AppendLine(new string('─', TimeWidth + FromWidth + ToWidth + MessageWidth + 50));
 
-        // Build message lines
         foreach (var msg in msgList)
         {
-            var time = msg.Timestamp.ToString("HH:mm:ss");
-            sb.AppendLine(BuildMessageLine(msg, leftParticipant, rightParticipant));
-            sb.AppendLine(BuildIdleLine(time));
+            var sdpInfo = SdpParser.Parse(msg.RawBody);
+            var fromLabel = GetParticipantLabel(msg, isDest: false);
+            var toLabel = GetParticipantLabel(msg, isDest: true);
+            var method = msg.SipMethod.Length > 12 ? msg.SipMethod.Substring(0, 12) : msg.SipMethod;
+
+            var line = $"{msg.Timestamp:HH:mm:ss.fff}".PadRight(TimeWidth)
+                     + fromLabel.PadRight(FromWidth)
+                     + toLabel.PadRight(ToWidth)
+                     + method.PadRight(MessageWidth)
+                     + sdpInfo.Summary;
+
+            sb.AppendLine(line);
         }
+
+        sb.AppendLine(new string('─', TimeWidth + FromWidth + ToWidth + MessageWidth + 50));
 
         return sb.ToString().TrimEnd();
     }
 
-    private string BuildHeaderLine(string left, string center, string? right)
+    private string GetParticipantLabel(SipMessage msg, bool isDest)
     {
-        var leftPart = left.Length > ColumnWidth ? left.Substring(0, ColumnWidth - 1) : left.PadRight(ColumnWidth);
-        var centerPart = center.PadRight(ColumnWidth);
-        var rightPart = right != null
-            ? (right.Length > ColumnWidth ? right.Substring(0, ColumnWidth - 1) : right.PadRight(ColumnWidth))
-            : new string(' ', ColumnWidth);
-
-        return $"{leftPart}{centerPart}{rightPart}";
-    }
-
-    private string BuildSeparatorLine()
-    {
-        var left = "    |".PadRight(ColumnWidth);
-        var center = "|".PadRight(ColumnWidth);
-        var right = "|";
-        return $"{left}{center}{right}";
-    }
-
-    private string BuildIdleLine(string timePrefix = "        ")
-    {
-        var left = " ".PadRight(ColumnWidth - 1) + "|";
-        var center = " ".PadRight(ColumnWidth - 1) + "|";
-        var right = " ".PadRight(ColumnWidth - 1) + "|";
-        return $"{timePrefix}{left}{center}{right}";
-    }
-
-    private string BuildMessageLine(SipMessage msg, string leftParticipant, string? rightParticipant)
-    {
-        var time = msg.Timestamp.ToString("HH:mm:ss");
-        var method = msg.SipMethod.Substring(0, Math.Min(msg.SipMethod.Length, 15));
-
-        // Determine direction and sides
-        var isToRight = msg.RemoteAddress == rightParticipant;
-        var isReceived = msg.Direction == "Received";
-
-        var sb = new StringBuilder();
-        sb.Append(time);
-
-        if (!isToRight)
+        if (msg.Direction == "Received")
         {
-            // Left ↔ PBX
-            if (isReceived)
-            {
-                // Left → PBX
-                var arrow = BuildArrow(method, InnerWidth, rightward: true);
-                sb.Append("|");
-                sb.Append(arrow);
-                sb.Append("|");
-                sb.Append(new string(' ', ColumnWidth - 1));
-                sb.Append("|");
-                // Right column idle
-                sb.Append(new string(' ', ColumnWidth - 1));
-                sb.Append("|");
-            }
-            else
-            {
-                // PBX → Left
-                var arrow = BuildArrow(method, InnerWidth, rightward: false);
-                sb.Append("|");
-                sb.Append(arrow);
-                sb.Append("|");
-                sb.Append(new string(' ', ColumnWidth - 1));
-                sb.Append("|");
-                // Right column idle
-                sb.Append(new string(' ', ColumnWidth - 1));
-                sb.Append("|");
-            }
-        }
-        else if (rightParticipant != null)
-        {
-            // PBX ↔ Right
-            // Left column idle
-            sb.Append("|");
-            sb.Append(new string(' ', ColumnWidth - 1));
-            sb.Append("|");
-            // PBX column idle
-            sb.Append("|");
-            sb.Append(new string(' ', ColumnWidth - 1));
-            sb.Append("|");
-
-            if (isReceived)
-            {
-                // Right → PBX
-                var arrow = BuildArrow(method, InnerWidth, rightward: false);
-                sb.Append(arrow);
-            }
-            else
-            {
-                // PBX → Right
-                var arrow = BuildArrow(method, InnerWidth, rightward: true);
-                sb.Append(arrow);
-            }
-            sb.Append("|");
-        }
-
-        return sb.ToString();
-    }
-
-    private string BuildArrow(string method, int width, bool rightward)
-    {
-        var label = method.Length > width - 6 ? method.Substring(0, width - 6) : method;
-        var totalDashes = width - label.Length - 3; // 3 = space + space + arrowhead
-        var half = totalDashes / 2;
-
-        if (rightward)
-        {
-            var remaining = totalDashes - half;
-            return new string('-', half) + $" {label} " + new string('-', remaining) + ">";
+            var label = isDest ? "PBX" : ExtractIp(msg.RemoteAddress);
+            return label;
         }
         else
         {
-            var remaining = totalDashes - half;
-            return "<" + new string('-', half) + $" {label} " + new string('-', remaining);
+            var label = isDest ? ExtractIp(msg.RemoteAddress) : "PBX";
+            return label;
         }
+    }
+
+    private string ExtractIp(string remoteAddress)
+    {
+        if (string.IsNullOrWhiteSpace(remoteAddress))
+            return "";
+
+        var parts = remoteAddress.Split(':');
+        return parts[0];
     }
 }
