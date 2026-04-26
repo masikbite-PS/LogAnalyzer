@@ -217,6 +217,8 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="5"/>
+                        <RowDefinition Height="220"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
@@ -243,8 +245,11 @@
                                             <!-- Group Header -->
                                             <Border Background="#2C5F8A" CornerRadius="3" Padding="8,4" Margin="0,0,0,4">
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding ShortCallId}" Foreground="White"
-                                                               FontWeight="Bold" FontSize="11"/>
+                                                    <TextBox Text="{Binding CallId}" IsReadOnly="True"
+                                                             Background="Transparent" Foreground="White"
+                                                             FontWeight="Bold" FontSize="11"
+                                                             BorderThickness="0" Padding="0"
+                                                             SelectionBrush="#80FFFFFF"/>
                                                     <TextBlock Text="{Binding FlowSummary}" Foreground="#C8DCF0"
                                                                FontSize="10" FontFamily="Courier New" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                                 </StackPanel>
@@ -288,8 +293,27 @@
                                  Background="#F9F9F9" BorderThickness="1" BorderBrush="#CCCCCC"/>
                     </Grid>
 
+                    <!-- GridSplitter -->
+                    <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="#D0D0D0"/>
+
+                    <!-- Merged Call Flow Diagram -->
+                    <Grid Grid.Row="2" Margin="10,8,10,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Merged Call Flow" FontWeight="Bold" FontSize="11"
+                                   Foreground="#555" Margin="0,0,0,4"/>
+                        <TextBox Grid.Row="1" IsReadOnly="True" FontFamily="Courier New" FontSize="10"
+                                 TextWrapping="NoWrap" Padding="8"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 Text="{Binding SipViewModel.MergedCallFlowDiagram, Mode=OneWay}"
+                                 Background="#F9F9F9" BorderThickness="1" BorderBrush="#CCCCCC"/>
+                    </Grid>
+
                     <!-- Status -->
-                    <TextBlock Grid.Row="1" Margin="10,4,10,6"
+                    <TextBlock Grid.Row="3" Margin="10,4,10,6"
                                Text="{Binding SipViewModel.StatusMessage}"
                                VerticalAlignment="Center" Foreground="#555"/>
                 </Grid>

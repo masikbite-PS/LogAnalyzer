@@ -9,7 +9,6 @@ namespace LogAnalyzer.ViewModels;
 public class SipFlowGroup
 {
     public string CallId { get; set; } = "";
-    public string ShortCallId { get; set; } = "";
     public string FlowSummary { get; set; } = "";
     public ObservableCollection<SipMessage> Messages { get; set; } = new();
 }
@@ -25,7 +24,11 @@ public partial class SipViewModel : ObservableObject
     [ObservableProperty]
     private string statusMessage = "";
 
+    [ObservableProperty]
+    private string mergedCallFlowDiagram = "";
+
     private readonly SipKnowledgeBase _kb = new();
+    private readonly SipCallFlowDiagramBuilder _diagramBuilder = new();
 
     public void SetData(List<SipMessage> messages, string callId, string? partnerCallId)
     {
@@ -61,8 +64,7 @@ public partial class SipViewModel : ObservableObject
         {
             var flowGroup = new SipFlowGroup
             {
-                CallId = group.Key,
-                ShortCallId = group.Key.Length > 18 ? group.Key.Substring(0, 18) + "..." : group.Key
+                CallId = group.Key
             };
 
             var groupMessages = group.OrderBy(m => m.Timestamp).ToList();
@@ -80,6 +82,9 @@ public partial class SipViewModel : ObservableObject
             SipFlowGroups.Add(flowGroup);
             totalMessages += groupMessages.Count;
         }
+
+        // Build merged diagram
+        MergedCallFlowDiagram = _diagramBuilder.Build(filtered);
 
         // Update status
         var dialogCount = groups.Count;
