@@ -100,6 +100,9 @@ public class SipCallFlowDiagramBuilder
                 sb.Append("|");
                 sb.Append(new string(' ', ColumnWidth - 1));
                 sb.Append("|");
+                // Right column idle
+                sb.Append(new string(' ', ColumnWidth - 1));
+                sb.Append("|");
             }
             else
             {
@@ -110,11 +113,19 @@ public class SipCallFlowDiagramBuilder
                 sb.Append("|");
                 sb.Append(new string(' ', ColumnWidth - 1));
                 sb.Append("|");
+                // Right column idle
+                sb.Append(new string(' ', ColumnWidth - 1));
+                sb.Append("|");
             }
         }
         else if (rightParticipant != null)
         {
             // PBX ↔ Right
+            // Left column idle
+            sb.Append("|");
+            sb.Append(new string(' ', ColumnWidth - 1));
+            sb.Append("|");
+            // PBX column idle
             sb.Append("|");
             sb.Append(new string(' ', ColumnWidth - 1));
             sb.Append("|");
