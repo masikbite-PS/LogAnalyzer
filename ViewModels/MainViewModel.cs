@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -132,16 +131,12 @@ namespace LogAnalyzer.ViewModels
                 }
 
                 // Parse SIP messages
-                var sipMessages = new List<SipMessage>();
                 if (!string.IsNullOrWhiteSpace(SipFolderPath))
                 {
                     StatusMessage = "Parsing SIP messages...";
                     var sipParser = new SipLogParser();
-                    sipMessages = await sipParser.ParseAsync(SipFolderPath, progress);
+                    var sipMessages = await sipParser.ParseAsync(SipFolderPath, progress);
                     SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerPhysicalId);
-
-                    StatusMessage = "Enriching logs with SIP data...";
-                    EnrichLogEntriesWithSipData(filteredEntries, sipMessages);
                 }
                 else
                 {
@@ -213,23 +208,6 @@ namespace LogAnalyzer.ViewModels
         private void CancelAnalysis()
         {
             _cancellationTokenSource?.Cancel();
-        }
-
-        private void EnrichLogEntriesWithSipData(List<LogEntry> logEntries, List<SipMessage> sipMessages)
-        {
-            foreach (var sip in sipMessages)
-            {
-                var match = logEntries.FirstOrDefault(e =>
-                    e.SourceFile == sip.SourceFile &&
-                    Math.Abs((e.Timestamp - sip.Timestamp).TotalMilliseconds) < 10 &&
-                    e.Component.Contains("SipGateway", StringComparison.OrdinalIgnoreCase)
-                );
-
-                if (match != null && string.IsNullOrWhiteSpace(match.SipRawBody))
-                {
-                    match.SipRawBody = sip.RawBody;
-                }
-            }
         }
 
         private static string FormatDuration(long milliseconds)

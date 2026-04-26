@@ -14,10 +14,7 @@ namespace LogAnalyzer.Models
 
         public override string ToString()
         {
-            var logLine = $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
-            if (!string.IsNullOrWhiteSpace(SipRawBody))
-                logLine += $"\n{SipRawBody}";
-            return logLine;
+            return $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
         }
     }
 }
