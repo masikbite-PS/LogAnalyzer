@@ -20,5 +20,6 @@ namespace LogAnalyzer.Models
         public string? CallTypeName { get; set; }
 
         public List<string> SourceFiles { get; set; } = new();
+        public List<string> PartnerChannelIds { get; set; } = new();
     }
 }

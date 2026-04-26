@@ -327,6 +327,45 @@
                                VerticalAlignment="Center" Foreground="#555"/>
                 </Grid>
             </TabItem>
+
+            <!-- Tab 4: Scripts -->
+            <TabItem Header="Scripts" Padding="10,5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ListBox Grid.Row="0" ItemsSource="{Binding ScriptsViewModel.ScriptsEntries}" Margin="10" FontFamily="Courier New" FontSize="10">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Mode=OneWay}" Margin="0,0" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Foreground" Value="#000000"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Debug">
+                                                    <Setter Property="TextBox.Foreground" Value="#808080"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Warning">
+                                                    <Setter Property="TextBox.Foreground" Value="#FF8C00"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Error">
+                                                    <Setter Property="TextBox.Foreground" Value="#FF0000"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Grid.Row="1" Margin="10,4,10,6"
+                               Text="{Binding ScriptsViewModel.StatusMessage}"
+                               VerticalAlignment="Center" Foreground="#555"/>
+                </Grid>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

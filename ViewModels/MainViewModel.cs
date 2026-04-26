@@ -56,6 +56,8 @@ namespace LogAnalyzer.ViewModels
 
         public SipViewModel SipViewModel { get; } = new();
 
+        public ScriptsViewModel ScriptsViewModel { get; } = new();
+
         [RelayCommand]
         private void SelectPbxFolder()
         {
@@ -125,6 +127,7 @@ namespace LogAnalyzer.ViewModels
 
                 CallInfo = callInfo;
                 SqlDataViewModel.SetData(allEntries, CallId, callInfo.PartnerPhysicalId ?? "");
+                ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds);
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);

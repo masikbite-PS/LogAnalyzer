@@ -92,6 +92,7 @@ namespace LogAnalyzer.Services
 
             // Extract call info
             var callInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+            callInfo.PartnerChannelIds = partnerChannelIds.ToList();
 
             return (matchedEntries, callInfo);
         }
