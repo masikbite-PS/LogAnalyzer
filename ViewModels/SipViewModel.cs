@@ -1,6 +1,10 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LogAnalyzer.Models;
 using LogAnalyzer.Services;
 
@@ -89,5 +93,31 @@ public partial class SipViewModel : ObservableObject
         // Update status
         var dialogCount = groups.Count;
         StatusMessage = $"Found {dialogCount} SIP dialog(s), {totalMessages} message(s) total";
+    }
+
+    [RelayCommand]
+    public void ExportToTextile()
+    {
+        if (string.IsNullOrWhiteSpace(MergedCallFlowDiagram))
+        {
+            MessageBox.Show("No data to export", "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var textile = GenerateTextileFormat();
+        var dialog = new TextileExportDialog(textile);
+        dialog.ShowDialog();
+    }
+
+    private string GenerateTextileFormat()
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("h3. SIP Call Flow with Session Details");
+        sb.AppendLine();
+        sb.AppendLine("bc.. " + MergedCallFlowDiagram.Replace("\n", "\nbc.. "));
+        sb.AppendLine();
+
+        return sb.ToString();
     }
 }
