@@ -157,6 +157,9 @@ namespace LogAnalyzer.Services
             if ((value.StartsWith("'") && value.EndsWith("'")) ||
                 (value.StartsWith("\"") && value.EndsWith("\"")))
             {
+                if (value.Length < 2)
+                    return value;
+
                 return value.Substring(1, value.Length - 2)
                     .Replace("\\'", "'")
                     .Replace("\\\"", "\"");
