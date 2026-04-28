@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:LogAnalyzer"
         xmlns:converters="clr-namespace:LogAnalyzer.Converters"
         mc:Ignorable="d"
-        Title="PBX Log Analyzer" Height="900" Width="1600" WindowStartupLocation="CenterScreen"
+        Title="PBX Log Analyzer — PBX 2024.2" Height="900" Width="1600" WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/Data/loganalyzer_icon.png">
     <Window.Resources>
         <converters:DurationConverter x:Key="DurationConverter"/>
