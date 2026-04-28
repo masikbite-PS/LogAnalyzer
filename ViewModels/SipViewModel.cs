@@ -34,29 +34,41 @@ public partial class SipViewModel : ObservableObject
     private readonly SipKnowledgeBase _kb = new();
     private readonly SipCallFlowDiagramBuilder _diagramBuilder = new();
 
-    public void SetData(List<SipMessage> messages, string callId, string? partnerCallId)
+    public void SetData(List<SipMessage> messages, string sipCallId, string? partnerCallId = null)
     {
         SipFlowGroups.Clear();
         SelectedMessage = null;
 
-        if (string.IsNullOrWhiteSpace(callId) && string.IsNullOrWhiteSpace(partnerCallId))
+        if (string.IsNullOrWhiteSpace(sipCallId) && string.IsNullOrWhiteSpace(partnerCallId))
         {
-            StatusMessage = "No search criteria provided";
+            StatusMessage = "No SIP Call-ID provided";
             return;
         }
 
-        // Filter messages by Call-ID (SIP Call-ID header)
+        // Filter messages by Call-ID (SIP Call-ID header) - exact match preferred
         var filtered = messages
             .Where(m =>
-                (!string.IsNullOrWhiteSpace(callId) && m.CallId.Contains(callId, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Contains(partnerCallId, StringComparison.OrdinalIgnoreCase))
+                (!string.IsNullOrWhiteSpace(sipCallId) && m.CallId.Equals(sipCallId, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Equals(partnerCallId, StringComparison.OrdinalIgnoreCase))
             )
             .OrderBy(m => m.Timestamp)
             .ToList();
 
+        // If no exact match, try substring match
         if (filtered.Count == 0)
         {
-            StatusMessage = $"No SIP messages found for Call-ID: {callId}";
+            filtered = messages
+                .Where(m =>
+                    (!string.IsNullOrWhiteSpace(sipCallId) && m.CallId.Contains(sipCallId, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Contains(partnerCallId, StringComparison.OrdinalIgnoreCase))
+                )
+                .OrderBy(m => m.Timestamp)
+                .ToList();
+        }
+
+        if (filtered.Count == 0)
+        {
+            StatusMessage = $"No SIP messages found for Call-ID: {sipCallId}";
             return;
         }
 
