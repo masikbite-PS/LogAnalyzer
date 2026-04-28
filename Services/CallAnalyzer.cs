@@ -9,23 +9,24 @@ namespace LogAnalyzer.Services
 {
     public class CallAnalyzer
     {
-        public (List<LogEntry> entries, CallInfo info) AnalyzeCall(List<LogEntry> allEntries, string callId)
+        public (List<LogEntry> entries, CallInfo info) AnalyzeCall(
+            List<LogEntry> allEntries, string callId, List<SipMessage>? sipMessages = null)
         {
-            var matchedEntries = new List<LogEntry>();
             var sourceFiles = new HashSet<string>();
 
-            // Search for patterns: CallID=<callId> or ID=<callId>
+            // Find initial matches by callId in Message or SipRawBody
             var escapedCallId = Regex.Escape(callId);
             var pattern = $"(CallID|ID)\\s*=\\s*['\"]?{escapedCallId}['\"]?";
             var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-            var initialMatches = allEntries.Where(e => regex.IsMatch(e.Message)).ToList();
+            var initialMatches = allEntries.Where(e =>
+                regex.IsMatch(e.Message) || regex.IsMatch(e.SipRawBody)).ToList();
 
             if (initialMatches.Count == 0)
             {
-                // If no exact pattern match, try simple substring search
                 initialMatches = allEntries.Where(e =>
-                    e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase)).ToList();
+                    e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
+                    e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
             if (initialMatches.Count == 0)
@@ -33,68 +34,244 @@ namespace LogAnalyzer.Services
                 return (new List<LogEntry>(), new CallInfo { CallId = callId });
             }
 
-            // Find time boundaries from initial matches
             var minTime = initialMatches.Min(e => e.Timestamp);
             var maxTime = initialMatches.Max(e => e.Timestamp);
 
-            // Expand time window: 5 minutes before first match, 5 minutes after last match
+            List<LogEntry> matchedEntries;
+            HashSet<string> channelIds = new();
+            HashSet<string> partnerSipCallIds = new();
+
+            // Channel-based filtering when SIP messages are available
+            var sipNumbers = ExtractSipNumbers(sipMessages, callId);
+            if (sipNumbers.Count > 0)
+            {
+                channelIds = FindChannelIds(allEntries, sipNumbers);
+                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipNumbers, callId);
+            }
+
+            if (channelIds.Count > 0)
+            {
+                // Filter strictly by channel IDs and SIP Call-IDs
+                matchedEntries = allEntries.Where(e =>
+                    MatchesChannel(e.Message, channelIds) ||
+                    (e.SipRawBody.Length > 0 && (
+                        e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
+                        partnerSipCallIds.Any(p => e.SipRawBody.Contains(p, StringComparison.OrdinalIgnoreCase))
+                    ))
+                ).OrderBy(e => e.Timestamp).ToList();
+
+                // Find partner channels from Switch statements and add their entries
+                var partnerChannelIds = ExtractPartnerChannelIds(matchedEntries);
+                if (partnerChannelIds.Count > 0)
+                {
+                    foreach (var pid in partnerChannelIds) channelIds.Add(pid);
+                    var partnerEntries = allEntries.Where(e => MatchesChannel(e.Message, partnerChannelIds));
+                    matchedEntries = matchedEntries.Union(partnerEntries)
+                        .OrderBy(e => e.Timestamp).ToList();
+                }
+
+                // Extract refs first so SQL INSERT entries get added to matchedEntries
+                var callInfo = new CallInfo { CallId = callId };
+                callInfo.PartnerChannelIds = channelIds.ToList();
+                callInfo.PartnerSipCallIds = partnerSipCallIds.ToList();
+                ExtractCallRefs(allEntries, ref matchedEntries, callInfo, minTime, maxTime);
+
+                // Now ExtractCallInfo can find SQL INSERT entries pulled in above
+                var fullInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+                fullInfo.PartnerChannelIds = callInfo.PartnerChannelIds;
+                fullInfo.PartnerSipCallIds = callInfo.PartnerSipCallIds;
+                fullInfo.LogicalCallRef = callInfo.LogicalCallRef;
+                fullInfo.PhysicalCallRef = callInfo.PhysicalCallRef;
+                fullInfo.StatCallRef = callInfo.StatCallRef;
+                foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
+                fullInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
+                return (matchedEntries, fullInfo);
+            }
+
+            // Fallback: time-window approach (±5 min)
             var timeWindowBefore = TimeSpan.FromMinutes(5);
             var timeWindowAfter = TimeSpan.FromMinutes(5);
-
             var searchStart = minTime.Add(-timeWindowBefore);
             var searchEnd = maxTime.Add(timeWindowAfter);
 
-            // Collect all entries within the time window
             matchedEntries = allEntries.Where(e =>
                 e.Timestamp >= searchStart && e.Timestamp <= searchEnd
             ).OrderBy(e => e.Timestamp).ToList();
 
-            // Extract partner channel IDs from Switch statements
-            var partnerChannelIds = ExtractPartnerChannelIds(matchedEntries);
-
-            // Add traces from partner channels
-            if (partnerChannelIds.Count > 0)
+            var partnerIds = ExtractPartnerChannelIds(matchedEntries);
+            if (partnerIds.Count > 0)
             {
                 var partnerMatches = new List<LogEntry>();
-                foreach (var partnerId in partnerChannelIds)
+                foreach (var partnerId in partnerIds)
                 {
                     var partnerEntries = allEntries.Where(e =>
-                        e.Message.Contains(partnerId, StringComparison.OrdinalIgnoreCase)
-                    ).ToList();
-
+                        e.Message.Contains(partnerId, StringComparison.OrdinalIgnoreCase)).ToList();
                     if (partnerEntries.Count > 0)
                     {
-                        var partnerMinTime = partnerEntries.Min(e => e.Timestamp);
-                        var partnerMaxTime = partnerEntries.Max(e => e.Timestamp);
-
-                        var partnerSearchStart = partnerMinTime.Add(-timeWindowBefore);
-                        var partnerSearchEnd = partnerMaxTime.Add(timeWindowAfter);
-
-                        var partnerWindowEntries = allEntries.Where(e =>
-                            e.Timestamp >= partnerSearchStart && e.Timestamp <= partnerSearchEnd
-                        ).ToList();
-
-                        partnerMatches.AddRange(partnerWindowEntries);
+                        var ps = partnerEntries.Min(e => e.Timestamp).Add(-timeWindowBefore);
+                        var pe = partnerEntries.Max(e => e.Timestamp).Add(timeWindowAfter);
+                        partnerMatches.AddRange(allEntries.Where(e => e.Timestamp >= ps && e.Timestamp <= pe));
                     }
                 }
-
-                // Merge and deduplicate entries
-                matchedEntries = matchedEntries.Union(partnerMatches)
-                    .OrderBy(e => e.Timestamp)
-                    .ToList();
+                matchedEntries = matchedEntries.Union(partnerMatches).OrderBy(e => e.Timestamp).ToList();
             }
 
-            // Collect source files
-            foreach (var entry in matchedEntries)
+            foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
+            var info = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+            info.PartnerChannelIds = partnerIds.ToList();
+            ExtractCallRefs(allEntries, ref matchedEntries, info, minTime, maxTime);
+            return (matchedEntries, info);
+        }
+
+        private static readonly Regex LogicalCallRefRegex = new(
+            @"logicalCallRef=([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12})",
+            RegexOptions.Compiled);
+
+        private static readonly Regex PhysicalCallRefRegex = new(
+            @"physicalCallRef=([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12})",
+            RegexOptions.Compiled);
+
+        private static readonly Regex StatCallRefValueRegex = new(
+            @"value='([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12})'",
+            RegexOptions.Compiled);
+
+        private static void ExtractCallRefs(
+            List<LogEntry> allEntries, ref List<LogEntry> matchedEntries, CallInfo callInfo,
+            DateTime searchFrom, DateTime searchTo)
+        {
+            DateTime? logicalRefFoundAt = null;
+
+            // Only look within the exact SIP Call-ID time range (no expansion)
+            foreach (var entry in matchedEntries
+                .Where(e => e.Timestamp >= searchFrom && e.Timestamp <= searchTo))
             {
-                sourceFiles.Add(entry.SourceFile);
+                if (callInfo.LogicalCallRef == null)
+                {
+                    var m = LogicalCallRefRegex.Match(entry.Message);
+                    if (m.Success)
+                    {
+                        callInfo.LogicalCallRef = m.Groups[1].Value;
+                        logicalRefFoundAt = entry.Timestamp;
+                    }
+                }
+                if (callInfo.PhysicalCallRef == null)
+                {
+                    var m = PhysicalCallRefRegex.Match(entry.Message);
+                    if (m.Success) callInfo.PhysicalCallRef = m.Groups[1].Value;
+                }
+                if (callInfo.LogicalCallRef != null && callInfo.PhysicalCallRef != null) break;
             }
 
-            // Extract call info
-            var callInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
-            callInfo.PartnerChannelIds = partnerChannelIds.ToList();
+            if (callInfo.LogicalCallRef == null || logicalRefFoundAt == null) return;
 
-            return (matchedEntries, callInfo);
+            // Search only within a short window after the logicalCallRef was first seen
+            var statSearchFrom = logicalRefFoundAt.Value;
+            var statSearchTo = statSearchFrom.AddSeconds(5);
+
+            var statEntry = allEntries.FirstOrDefault(e =>
+                e.Timestamp >= statSearchFrom &&
+                e.Timestamp <= statSearchTo &&
+                e.Component.Contains("SetStatCallRef", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains(callInfo.LogicalCallRef, StringComparison.OrdinalIgnoreCase));
+
+            if (statEntry != null)
+            {
+                var m = StatCallRefValueRegex.Match(statEntry.Message);
+                if (m.Success)
+                {
+                    callInfo.StatCallRef = m.Groups[1].Value;
+                    if (!matchedEntries.Contains(statEntry))
+                        matchedEntries = matchedEntries.Append(statEntry).OrderBy(e => e.Timestamp).ToList();
+
+                    // Also pull in SQL INSERT entries for this StatCallRef so ExtractCallInfo can populate CallInfo
+                    var statCallRef = callInfo.StatCallRef;
+                    var currentMatched = matchedEntries;
+                    var sqlEntries = allEntries.Where(e =>
+                        e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase) &&
+                        e.Message.Contains(statCallRef, StringComparison.OrdinalIgnoreCase) &&
+                        !currentMatched.Contains(e)).ToList();
+                    if (sqlEntries.Count > 0)
+                        matchedEntries = matchedEntries.Concat(sqlEntries).OrderBy(e => e.Timestamp).ToList();
+                }
+            }
+        }
+
+        private static bool MatchesChannel(string message, HashSet<string> channelIds)
+        {
+            foreach (var id in channelIds)
+            {
+                var prefix = $"id={id}";
+                if (message.StartsWith(prefix) &&
+                    (message.Length == prefix.Length ||
+                     message[prefix.Length] == ' ' ||
+                     message[prefix.Length] == '['))
+                    return true;
+            }
+            return false;
+        }
+
+        private static HashSet<string> ExtractSipNumbers(List<SipMessage>? sipMessages, string callId)
+        {
+            var numbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (sipMessages == null) return numbers;
+
+            var relevant = sipMessages.Where(m =>
+                m.CallId.Equals(callId, StringComparison.OrdinalIgnoreCase) ||
+                m.CallId.Contains(callId, StringComparison.OrdinalIgnoreCase));
+
+            foreach (var m in relevant)
+            {
+                if (!string.IsNullOrEmpty(m.FromNumber)) numbers.Add(NormalizeNumber(m.FromNumber));
+                if (!string.IsNullOrEmpty(m.ToNumber)) numbers.Add(NormalizeNumber(m.ToNumber));
+            }
+            return numbers;
+        }
+
+        private static HashSet<string> FindChannelIds(List<LogEntry> allEntries, HashSet<string> normalizedNumbers)
+        {
+            var channelIds = new HashSet<string>();
+            var idRegex = new Regex(@"\bid=(\d+)", RegexOptions.Compiled);
+
+            foreach (var entry in allEntries)
+            {
+                var msg = entry.Message;
+                if (!normalizedNumbers.Any(n => ContainsNumber(msg, n))) continue;
+                var m = idRegex.Match(msg);
+                if (m.Success) channelIds.Add(m.Groups[1].Value);
+            }
+            return channelIds;
+        }
+
+        private static HashSet<string> FindPartnerSipCallIds(
+            List<SipMessage> sipMessages, HashSet<string> numbers, string primaryCallId)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var msg in sipMessages)
+            {
+                if (msg.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase)) continue;
+                var from = NormalizeNumber(msg.FromNumber);
+                var to = NormalizeNumber(msg.ToNumber);
+                if (numbers.Contains(from) || numbers.Contains(to))
+                    result.Add(msg.CallId);
+            }
+            return result;
+        }
+
+        private static string NormalizeNumber(string n)
+        {
+            n = n.Trim();
+            if (n.StartsWith("+")) return n.Substring(1);
+            if (n.StartsWith("00")) return n.Substring(2);
+            return n;
+        }
+
+        private static bool ContainsNumber(string message, string normalizedNumber)
+        {
+            if (string.IsNullOrEmpty(normalizedNumber) || normalizedNumber.Length < 3) return false;
+            // Match both +49... and 0049... variants
+            return message.Contains(normalizedNumber, StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("+" + normalizedNumber, StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("00" + normalizedNumber, StringComparison.OrdinalIgnoreCase);
         }
 
         private HashSet<string> ExtractPartnerChannelIds(List<LogEntry> entries)

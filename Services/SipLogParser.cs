@@ -30,6 +30,16 @@ public class SipLogParser
         RegexOptions.Compiled
     );
 
+    private static readonly Regex FromRegex = new(
+        @"^From:.*?<sip:([^@>;]+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
+    private static readonly Regex ToRegex = new(
+        @"^To:.*?<sip:([^@>;]+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
     public async Task<List<SipMessage>> ParseAsync(string folderPath, IProgress<int>? progress = null)
     {
         var messages = new List<SipMessage>();
@@ -88,7 +98,7 @@ public class SipLogParser
                     {
                         var component = match.Groups[4].Value;
 
-                        if (component.Contains("SipGateway") && (line.Contains("Sent message") || line.Contains("Received message")))
+                        if (component.Contains("Sip", StringComparison.OrdinalIgnoreCase) && (line.Contains("Sent message") || line.Contains("Received message")))
                         {
                             // This is a SIP header line
                             // Flush previous message if any
@@ -172,6 +182,9 @@ public class SipLogParser
             // Extract SIP method or status
             var sipMethod = ExtractSipMethod(bodyLines);
 
+            var fromMatch = FromRegex.Match(rawBody);
+            var toMatch = ToRegex.Match(rawBody);
+
             return new SipMessage
             {
                 Timestamp = timestamp,
@@ -182,7 +195,9 @@ public class SipLogParser
                 RawBody = rawBody,
                 CallId = callId,
                 SipMethod = sipMethod,
-                SourceFile = sourceFile
+                SourceFile = sourceFile,
+                FromNumber = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "",
+                ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : ""
             };
         }
         catch

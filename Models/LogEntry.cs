@@ -14,7 +14,8 @@ namespace LogAnalyzer.Models
 
         public override string ToString()
         {
-            return $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
+            var header = $"[{Level,6}] {Timestamp:HH:mm:ss.fff} {Component,-40} {Message}";
+            return string.IsNullOrEmpty(SipRawBody) ? header : header + "\n" + SipRawBody;
         }
     }
 }

@@ -31,11 +31,21 @@ namespace LogAnalyzer.Services
                 {
                     using var reader = new StreamReader(filePath);
                     string? line;
+                    LogEntry? lastEntry = null;
                     while ((line = await reader.ReadLineAsync()) != null)
                     {
                         var entry = _parser.ParseLogLine(line, Path.GetFileName(filePath));
                         if (entry != null)
+                        {
                             entries.Add(entry);
+                            lastEntry = entry;
+                        }
+                        else if (lastEntry != null)
+                        {
+                            lastEntry.SipRawBody = lastEntry.SipRawBody.Length > 0
+                                ? lastEntry.SipRawBody + "\n" + line
+                                : line;
+                        }
                     }
                 }
                 catch (Exception ex)

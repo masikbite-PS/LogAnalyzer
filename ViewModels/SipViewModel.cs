@@ -34,7 +34,8 @@ public partial class SipViewModel : ObservableObject
     private readonly SipKnowledgeBase _kb = new();
     private readonly SipCallFlowDiagramBuilder _diagramBuilder = new();
 
-    public void SetData(List<SipMessage> messages, string sipCallId, string? partnerCallId = null)
+    public void SetData(List<SipMessage> messages, string sipCallId, string? partnerCallId = null,
+        IEnumerable<string>? partnerSipCallIds = null)
     {
         SipFlowGroups.Clear();
         SelectedMessage = null;
@@ -45,23 +46,24 @@ public partial class SipViewModel : ObservableObject
             return;
         }
 
-        // Filter messages by Call-ID (SIP Call-ID header) - exact match preferred
+        // Build full set of Call-IDs to show
+        var allCallIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(sipCallId)) allCallIds.Add(sipCallId);
+        if (!string.IsNullOrWhiteSpace(partnerCallId)) allCallIds.Add(partnerCallId);
+        if (partnerSipCallIds != null)
+            foreach (var id in partnerSipCallIds) if (!string.IsNullOrWhiteSpace(id)) allCallIds.Add(id);
+
+        // Filter messages by Call-ID - exact match preferred
         var filtered = messages
-            .Where(m =>
-                (!string.IsNullOrWhiteSpace(sipCallId) && m.CallId.Equals(sipCallId, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Equals(partnerCallId, StringComparison.OrdinalIgnoreCase))
-            )
+            .Where(m => allCallIds.Contains(m.CallId))
             .OrderBy(m => m.Timestamp)
             .ToList();
 
-        // If no exact match, try substring match
+        // If no exact match, try substring match on primary call ID
         if (filtered.Count == 0)
         {
             filtered = messages
-                .Where(m =>
-                    (!string.IsNullOrWhiteSpace(sipCallId) && m.CallId.Contains(sipCallId, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Contains(partnerCallId, StringComparison.OrdinalIgnoreCase))
-                )
+                .Where(m => allCallIds.Any(id => m.CallId.Contains(id, StringComparison.OrdinalIgnoreCase)))
                 .OrderBy(m => m.Timestamp)
                 .ToList();
         }

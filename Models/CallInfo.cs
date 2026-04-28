@@ -21,5 +21,11 @@ namespace LogAnalyzer.Models
 
         public List<string> SourceFiles { get; set; } = new();
         public List<string> PartnerChannelIds { get; set; } = new();
+        public List<string> PartnerSipCallIds { get; set; } = new();
+
+        // Extracted from channel logs when CallId is not provided
+        public string? LogicalCallRef { get; set; }
+        public string? PhysicalCallRef { get; set; }
+        public string? StatCallRef { get; set; }
     }
 }

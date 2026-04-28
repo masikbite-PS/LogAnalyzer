@@ -102,32 +102,44 @@ namespace LogAnalyzer.ViewModels
                 var allEntries = await _scanner.ScanFilesAsync(allFiles, progress, _cancellationTokenSource.Token);
                 _allScannedEntries = allEntries;
 
+                // Parse SIP messages first (needed for channel-based filtering)
+                var sipIdToSearch = !string.IsNullOrWhiteSpace(SipCallId) ? SipCallId : CallId;
+                StatusMessage = "Parsing SIP messages...";
+                var sipParser = new SipLogParser();
+                var sipMessages = await sipParser.ParseAsync(LogFolderPath, progress);
+
                 // Analyze using CallId if provided
                 var callInfo = new CallInfo { CallId = CallId ?? SipCallId ?? "" };
                 var filteredEntries = new List<LogEntry>();
 
                 if (!string.IsNullOrWhiteSpace(CallId))
                 {
-                    StatusMessage = $"Scanning complete. Analyzing call {CallId}...";
-                    var result = _analyzer.AnalyzeCall(allEntries, CallId);
+                    StatusMessage = $"Analyzing call {CallId}...";
+                    var result = _analyzer.AnalyzeCall(allEntries, CallId, sipMessages);
+                    filteredEntries = result.Item1;
+                    callInfo = result.Item2;
+                }
+                else if (!string.IsNullOrWhiteSpace(SipCallId))
+                {
+                    StatusMessage = $"Analyzing SIP call {SipCallId}...";
+                    var result = _analyzer.AnalyzeCall(allEntries, SipCallId, sipMessages);
                     filteredEntries = result.Item1;
                     callInfo = result.Item2;
                 }
 
                 CallInfo = callInfo;
-                SqlDataViewModel.SetData(allEntries, CallId ?? "", callInfo.PartnerPhysicalId ?? "");
+                var sqlCallId = !string.IsNullOrWhiteSpace(CallId)
+                    ? CallId
+                    : callInfo.StatCallRef ?? "";
+                SqlDataViewModel.SetData(allEntries, sqlCallId, callInfo.PartnerPhysicalId ?? "");
                 ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds);
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);
                 }
 
-                // Parse SIP messages - use SipCallId if provided, otherwise use CallId
-                var sipIdToSearch = !string.IsNullOrWhiteSpace(SipCallId) ? SipCallId : CallId;
-                StatusMessage = "Parsing SIP messages...";
-                var sipParser = new SipLogParser();
-                var sipMessages = await sipParser.ParseAsync(LogFolderPath, progress);
-                SipViewModel.SetData(sipMessages, sipIdToSearch ?? "", callInfo.PartnerPhysicalId);
+                SipViewModel.SetData(sipMessages, sipIdToSearch ?? "", callInfo.PartnerPhysicalId,
+                    callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
             }
