@@ -21,13 +21,13 @@ namespace LogAnalyzer.ViewModels
         private List<LogEntry> _allScannedEntries = new();
 
         [ObservableProperty]
-        private string pbxFolderPath = "";
-
-        [ObservableProperty]
-        private string sipFolderPath = "";
+        private string logFolderPath = "";
 
         [ObservableProperty]
         private string callId = "";
+
+        [ObservableProperty]
+        private string sipCallId = "";
 
         [ObservableProperty]
         private int progressValue = 0;
@@ -59,37 +59,27 @@ namespace LogAnalyzer.ViewModels
         public ScriptsViewModel ScriptsViewModel { get; } = new();
 
         [RelayCommand]
-        private void SelectPbxFolder()
+        private void SelectLogFolder()
         {
             var dialog = new VistaFolderBrowserDialog();
             if (dialog.ShowDialog() == true)
             {
-                PbxFolderPath = dialog.SelectedPath;
-            }
-        }
-
-        [RelayCommand]
-        private void SelectSipFolder()
-        {
-            var dialog = new VistaFolderBrowserDialog();
-            if (dialog.ShowDialog() == true)
-            {
-                SipFolderPath = dialog.SelectedPath;
+                LogFolderPath = dialog.SelectedPath;
             }
         }
 
         [RelayCommand]
         private async Task Analyze()
         {
-            if (string.IsNullOrWhiteSpace(CallId))
+            if (string.IsNullOrWhiteSpace(CallId) && string.IsNullOrWhiteSpace(SipCallId))
             {
-                StatusMessage = "Please enter a CallID";
+                StatusMessage = "Please enter at least one CallID (from Calls or from SIP)";
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(PbxFolderPath) && string.IsNullOrWhiteSpace(SipFolderPath))
+            if (string.IsNullOrWhiteSpace(LogFolderPath))
             {
-                StatusMessage = "Please select at least one folder";
+                StatusMessage = "Please select a log folder";
                 return;
             }
 
@@ -103,16 +93,8 @@ namespace LogAnalyzer.ViewModels
                 _cancellationTokenSource = new CancellationTokenSource();
                 var progress = new Progress<int>(p => ProgressValue = p);
 
-                // Collect all log files
-                var allFiles = new System.Collections.Generic.List<string>();
-                if (!string.IsNullOrWhiteSpace(PbxFolderPath))
-                {
-                    allFiles.AddRange(_scanner.GetLogFiles(PbxFolderPath));
-                }
-                if (!string.IsNullOrWhiteSpace(SipFolderPath))
-                {
-                    allFiles.AddRange(_scanner.GetLogFiles(SipFolderPath));
-                }
+                // Collect all log files from single folder
+                var allFiles = _scanner.GetLogFiles(LogFolderPath).ToList();
 
                 StatusMessage = $"Scanning {allFiles.Count} files...";
 
@@ -120,31 +102,32 @@ namespace LogAnalyzer.ViewModels
                 var allEntries = await _scanner.ScanFilesAsync(allFiles, progress, _cancellationTokenSource.Token);
                 _allScannedEntries = allEntries;
 
-                StatusMessage = $"Scanning complete. Analyzing call {CallId}...";
+                // Analyze using CallId if provided
+                var callInfo = new CallInfo { CallId = CallId ?? SipCallId ?? "" };
+                var filteredEntries = new List<LogEntry>();
 
-                // Analyze the call
-                var (filteredEntries, callInfo) = _analyzer.AnalyzeCall(allEntries, CallId);
+                if (!string.IsNullOrWhiteSpace(CallId))
+                {
+                    StatusMessage = $"Scanning complete. Analyzing call {CallId}...";
+                    var result = _analyzer.AnalyzeCall(allEntries, CallId);
+                    filteredEntries = result.Item1;
+                    callInfo = result.Item2;
+                }
 
                 CallInfo = callInfo;
-                SqlDataViewModel.SetData(allEntries, CallId, callInfo.PartnerPhysicalId ?? "");
+                SqlDataViewModel.SetData(allEntries, CallId ?? "", callInfo.PartnerPhysicalId ?? "");
                 ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds);
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);
                 }
 
-                // Parse SIP messages
-                if (!string.IsNullOrWhiteSpace(SipFolderPath))
-                {
-                    StatusMessage = "Parsing SIP messages...";
-                    var sipParser = new SipLogParser();
-                    var sipMessages = await sipParser.ParseAsync(SipFolderPath, progress);
-                    SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerPhysicalId);
-                }
-                else
-                {
-                    SipViewModel.SetData(new(), CallId, callInfo.PartnerPhysicalId);
-                }
+                // Parse SIP messages - use SipCallId if provided, otherwise use CallId
+                var sipIdToSearch = !string.IsNullOrWhiteSpace(SipCallId) ? SipCallId : CallId;
+                StatusMessage = "Parsing SIP messages...";
+                var sipParser = new SipLogParser();
+                var sipMessages = await sipParser.ParseAsync(LogFolderPath, progress);
+                SipViewModel.SetData(sipMessages, sipIdToSearch ?? "", callInfo.PartnerPhysicalId);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
             }

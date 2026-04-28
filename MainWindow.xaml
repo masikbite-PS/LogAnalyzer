@@ -24,19 +24,20 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="PBX Folder:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding PbxFolderPath}" IsReadOnly="True" Padding="5" Background="#F0F0F0"/>
-                <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding SelectPbxFolderCommand}" Padding="15,5" Width="100" Margin="10,0,0,0"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LogFolderPath}" IsReadOnly="True" Padding="5" Background="#F0F0F0"/>
+                <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding SelectLogFolderCommand}" Padding="15,5" Width="100" Margin="10,0,0,0"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="SIP Folder:" VerticalAlignment="Center" Margin="0,8,10,0"/>
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SipFolderPath}" IsReadOnly="True" Padding="5" Background="#F0F0F0" Margin="0,8,0,0"/>
-                <Button Grid.Row="1" Grid.Column="2" Content="Browse" Command="{Binding SelectSipFolderCommand}" Padding="15,5" Width="100" Margin="10,8,0,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="CallID (from Calls):" VerticalAlignment="Center" Margin="0,8,10,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CallId, UpdateSourceTrigger=PropertyChanged}" Padding="5" Margin="0,8,0,0"/>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="CallID:" VerticalAlignment="Center" Margin="0,8,10,0"/>
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CallId, UpdateSourceTrigger=PropertyChanged}" Padding="5" Margin="0,8,0,0"/>
-                <Button Grid.Row="2" Grid.Column="2" Content="Analyze" Command="{Binding AnalyzeCommand}" Padding="15,5" Width="100" Margin="10,8,0,0"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Call-ID (from SIP):" VerticalAlignment="Center" Margin="0,8,10,0"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SipCallId, UpdateSourceTrigger=PropertyChanged}" Padding="5" Margin="0,8,0,0"/>
+
+                <Button Grid.Row="3" Grid.Column="2" Content="Analyze" Command="{Binding AnalyzeCommand}" Padding="15,5" Width="100" Margin="10,8,0,0" HorizontalAlignment="Right"/>
             </Grid>
         </StackPanel>
 
