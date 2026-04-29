@@ -31,8 +31,7 @@ namespace LogAnalyzer.ViewModels
         private readonly SqlParser _sqlParser = new();
         private readonly TableDefinitionService _tableService = new();
         private List<LogEntry> _allEntries = new();
-        private string _callsId = string.Empty;      // matches Calls.Id
-        private string _statCallRef = string.Empty;  // matches CallsQueues.CallId, AgentCalls.CallRef, etc.
+        private string _searchCallId = string.Empty;
         private string _partnerPhysicalId = string.Empty;
 
         [ObservableProperty]
@@ -110,13 +109,12 @@ namespace LogAnalyzer.ViewModels
             RefreshTableList();
         }
 
-        public void SetData(List<LogEntry> entries, string callsId, string statCallRef, string partnerPhysicalId = "")
+        public void SetData(List<LogEntry> entries, string callId, string partnerPhysicalId = "")
         {
             SqlRecords.Clear();
             StatusMessage = "Analyzing...";
             _allEntries = entries;
-            _callsId = callsId;
-            _statCallRef = statCallRef;
+            _searchCallId = callId;
             _partnerPhysicalId = partnerPhysicalId;
             RefreshTableData();
         }
@@ -135,8 +133,7 @@ namespace LogAnalyzer.ViewModels
         {
             SqlRecords.Clear();
 
-            if (string.IsNullOrEmpty(SelectedTable) ||
-                (string.IsNullOrEmpty(_callsId) && string.IsNullOrEmpty(_statCallRef)))
+            if (string.IsNullOrEmpty(SelectedTable) || string.IsNullOrEmpty(_searchCallId))
             {
                 StatusMessage = "Run analysis first";
                 return;
@@ -164,12 +161,6 @@ namespace LogAnalyzer.ViewModels
 
         private void LoadCallsRecord()
         {
-            if (string.IsNullOrEmpty(_callsId))
-            {
-                StatusMessage = "No Calls CallID provided";
-                return;
-            }
-
             foreach (var entry in _allEntries)
             {
                 if (!entry.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase))
@@ -180,7 +171,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (!columns.TryGetValue("Id", out var id) ||
-                    !id.Equals(_callsId, StringComparison.OrdinalIgnoreCase))
+                    !id.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var record = new SqlRecord { RecordLabel = $"Calls — Id: {id}", TableName = "Calls" };
@@ -207,7 +198,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (!columns.TryGetValue("CallId", out var callId) ||
-                    !callId.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase))
+                    !callId.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var seqNum = columns.TryGetValue("SeqNumber", out var seq) ? seq : count.ToString();
@@ -235,7 +226,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (!columns.TryGetValue("CallRef", out var callRef) ||
-                    !callRef.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase))
+                    !callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var agentId = columns.TryGetValue("AgentID", out var aid) ? aid : count.ToString();
@@ -265,7 +256,7 @@ namespace LogAnalyzer.ViewModels
                 // Filter by InitialCallId (= SearchCallID) or Id (= PartnerID)
                 bool matchesSearchCallId = false;
                 if (columns.TryGetValue("InitialCallId", out var initialCallId) &&
-                    initialCallId.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase))
+                    initialCallId.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase))
                 {
                     matchesSearchCallId = true;
                 }
@@ -307,7 +298,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (columns.TryGetValue("CallRef", out var callRef) &&
-                    callRef.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
                     columns.TryGetValue("AgentID", out var agentId))
                 {
                     agentIds.Add(agentId);
@@ -366,7 +357,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (columns.TryGetValue("CallRef", out var callRef) &&
-                    callRef.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
                     columns.TryGetValue("AgentID", out var agentId))
                 {
                     agentIds.Add(agentId);
@@ -456,7 +447,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (columns.TryGetValue("CallRef", out var callRef) &&
-                    callRef.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
                     columns.TryGetValue("AgentID", out var agentId))
                 {
                     agentIds.Add(agentId);
@@ -546,7 +537,7 @@ namespace LogAnalyzer.ViewModels
                     continue;
 
                 if (columns.TryGetValue("CallRef", out var callRef) &&
-                    callRef.Equals(_statCallRef, StringComparison.OrdinalIgnoreCase) &&
+                    callRef.Equals(_searchCallId, StringComparison.OrdinalIgnoreCase) &&
                     columns.TryGetValue("AgentID", out var agentId))
                 {
                     agentIds.Add(agentId);

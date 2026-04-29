@@ -128,7 +128,8 @@ namespace LogAnalyzer.ViewModels
                 }
 
                 CallInfo = callInfo;
-                SqlDataViewModel.SetData(allEntries, CallId ?? "", callInfo.StatCallRef ?? "", callInfo.PartnerPhysicalId ?? "");
+                var sqlCallId = !string.IsNullOrWhiteSpace(CallId) ? CallId : (callInfo.StatCallRef ?? "");
+                SqlDataViewModel.SetData(allEntries, sqlCallId, callInfo.PartnerPhysicalId ?? "");
                 ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.CallsQueuesChannelIds,
                     callInfo.InviteStartTime, callInfo.EndTime?.AddSeconds(5));
                 foreach (var entry in filteredEntries)
