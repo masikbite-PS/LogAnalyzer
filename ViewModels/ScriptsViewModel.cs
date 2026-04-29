@@ -17,6 +17,7 @@ public partial class ScriptsViewModel : ObservableObject
 
     public void SetData(List<LogEntry> allEntries, string? channelNumber, List<string> partnerChannelIds)
     {
+        StatusMessage = "Analyzing...";
         ScriptsEntries.Clear();
 
         var channelIds = new List<string>();

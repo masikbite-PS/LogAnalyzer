@@ -39,6 +39,8 @@ public partial class SipViewModel : ObservableObject
     {
         SipFlowGroups.Clear();
         SelectedMessage = null;
+        MergedCallFlowDiagram = "";
+        StatusMessage = "";
 
         if (string.IsNullOrWhiteSpace(sipCallId) && string.IsNullOrWhiteSpace(partnerCallId))
         {
