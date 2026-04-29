@@ -492,12 +492,11 @@ namespace LogAnalyzer.Services
             if (cols.Count == 0)
                 return (new List<LogEntry>(), callInfo);
 
-            // Populate CallInfo PURELY from Calls table data
+            // Populate CallInfo from Calls table
             if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
             if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
             if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
             if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
-            if (cols.TryGetValue("UserLogin", out var user)) callInfo.UserLogin = user;
             if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
             else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;
             if (cols.TryGetValue("CallType", out var callType) &&
@@ -517,14 +516,35 @@ namespace LogAnalyzer.Services
             callInfo.StartTime = startTime;
             callInfo.EndTime = endTime;
 
-            // Filter log entries by exact time bounds from Calls
+            // Set StatCallRef for CallsQueues lookup
+            callInfo.StatCallRef = callId;
+            ExtractCallsQueuesData(allEntries, callInfo);
+
+            // Update UserLogin from CallsQueues if available
+            if (!string.IsNullOrEmpty(callInfo.UserLogin))
+                ; // Already set from CallsQueues
+
+            // Build channel set: Calls channel + CallsQueues channels
+            var channelIds = new HashSet<string>();
+            if (!string.IsNullOrEmpty(callInfo.ChannelNumber))
+                channelIds.Add(callInfo.ChannelNumber);
+            foreach (var ch in callInfo.CallsQueuesChannelIds)
+                channelIds.Add(ch);
+
+            // Filter log entries: time bounds [start - 5s, end + 5s] for Scripts/Log context
+            var logStartTime = startTime.AddSeconds(-5);
+            var logEndTime = endTime.AddSeconds(5);
+
             var matchedEntries = allEntries.Where(e =>
-                e.Timestamp >= startTime && e.Timestamp <= endTime
+                e.Timestamp >= logStartTime && e.Timestamp <= logEndTime &&
+                (channelIds.Count == 0 || MatchesChannel(e.Message, channelIds))
             ).OrderBy(e => e.Timestamp).ToList();
 
             foreach (var entry in matchedEntries)
                 sourceFiles.Add(entry.SourceFile);
 
+            callInfo.PartnerChannelIds = channelIds.ToList();
+            callInfo.InviteStartTime = logStartTime;
             callInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
             return (matchedEntries, callInfo);
         }
