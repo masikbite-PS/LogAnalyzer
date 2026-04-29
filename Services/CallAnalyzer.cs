@@ -9,10 +9,15 @@ namespace LogAnalyzer.Services
 {
     public class CallAnalyzer
     {
+
         public (List<LogEntry> entries, CallInfo info) AnalyzeCall(
             List<LogEntry> allEntries, string? pbxCallId, string? sipCallId,
             List<SipMessage>? sipMessages = null)
         {
+            // CallID-only path: isolated logic, no SIP interference
+            if (!string.IsNullOrWhiteSpace(pbxCallId) && string.IsNullOrWhiteSpace(sipCallId))
+                return AnalyzeCallIdOnly(allEntries, pbxCallId);
+
             var sourceFiles = new HashSet<string>();
             // logFilterId: used for PBX log entry matching (prefer PBX CallID, fall back to SIP Call-ID)
             // sipLookupId: used exclusively for SIP message lookups (phone number extraction, partner search)
@@ -108,93 +113,6 @@ namespace LogAnalyzer.Services
                 return (matchedEntries, fullInfo);
             }
 
-            // For pbxCallId-only: Calls INSERT is the ONLY source of truth
-            if (sipLookupId == null)
-            {
-                var sqlInsert = initialMatches.FirstOrDefault(e =>
-                    e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase));
-                if (sqlInsert != null)
-                {
-                    // Combine Message + SipRawBody to handle multi-line INSERTs
-                    var fullSql = string.IsNullOrEmpty(sqlInsert.SipRawBody)
-                        ? sqlInsert.Message
-                        : sqlInsert.Message + " " + sqlInsert.SipRawBody;
-                    var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
-
-                    if (cols.Count > 0)  // Successful parse
-                    {
-                        // Build CallInfo directly from parsed columns
-                        var callInfo = new CallInfo { CallId = logFilterId };
-                        if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
-                        if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
-                        if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
-                        if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
-                        if (cols.TryGetValue("UserLogin", out var user)) callInfo.UserLogin = user;
-                        if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
-                        else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;
-                        if (cols.TryGetValue("CallType", out var callType) &&
-                            CallTypeNames.TryGetValue(callType, out var typeName))
-                            callInfo.CallTypeName = $"{typeName} ({callType})";
-                        if (cols.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
-                            callInfo.Duration = durMs;
-
-                        callInfo.StatCallRef = logFilterId;
-                        ExtractCallsQueuesData(allEntries, callInfo);
-
-                        // Extract exact time from ServerStartDateTime
-                        if (DateTime.TryParse(callInfo.ServerStartDateTime, out var callStartTime))
-                        {
-                            var callStart = callStartTime;
-                            var callEnd = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
-                                ? callStartTime.AddMilliseconds(callInfo.Duration.Value)
-                                : callStartTime;
-
-                            // Filter: use ChannelNumber if available, otherwise time only
-                            channelIds = new HashSet<string>();
-                            if (!string.IsNullOrEmpty(callInfo.ChannelNumber))
-                                channelIds.Add(callInfo.ChannelNumber);
-                            foreach (var ch in callInfo.CallsQueuesChannelIds)
-                                channelIds.Add(ch);
-
-                            if (channelIds.Count > 0)
-                            {
-                                matchedEntries = allEntries.Where(e =>
-                                    e.Timestamp >= callStart && e.Timestamp <= callEnd &&
-                                    MatchesChannel(e.Message, channelIds)
-                                ).OrderBy(e => e.Timestamp).ToList();
-                            }
-                            else
-                            {
-                                matchedEntries = allEntries.Where(e =>
-                                    e.Timestamp >= callStart && e.Timestamp <= callEnd
-                                ).OrderBy(e => e.Timestamp).ToList();
-                            }
-
-                            if (!matchedEntries.Contains(sqlInsert))
-                                matchedEntries = matchedEntries.Append(sqlInsert).OrderBy(e => e.Timestamp).ToList();
-
-                            // Partner channels
-                            var partnerChannelIds = ExtractPartnerChannelIds(matchedEntries);
-                            if (partnerChannelIds.Count > 0)
-                            {
-                                foreach (var pid in partnerChannelIds) channelIds.Add(pid);
-                                var partnerEntries = allEntries.Where(e =>
-                                    e.Timestamp >= callStart && e.Timestamp <= callEnd &&
-                                    MatchesChannel(e.Message, partnerChannelIds));
-                                matchedEntries = matchedEntries.Union(partnerEntries)
-                                    .OrderBy(e => e.Timestamp).ToList();
-                            }
-
-                            foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
-                            callInfo.PartnerChannelIds = channelIds.ToList();
-                            callInfo.StartTime = callStartTime;
-                            callInfo.EndTime = callEnd;
-                            callInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
-                            return (matchedEntries, callInfo);
-                        }
-                    }
-                }
-            }
 
             // Fallback: time-window approach (±3 sec) — narrow to avoid capturing other calls
             var timeWindowBefore = TimeSpan.FromSeconds(3);
@@ -548,6 +466,67 @@ namespace LogAnalyzer.Services
 
             if (columns.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
                 info.Duration = durMs;
+        }
+
+        // Isolated CallID-only path: pure representation of Calls table data
+        private (List<LogEntry> entries, CallInfo info) AnalyzeCallIdOnly(
+            List<LogEntry> allEntries, string callId)
+        {
+            var sourceFiles = new HashSet<string>();
+            var callInfo = new CallInfo { CallId = callId };
+
+            // Find and parse the INSERT INTO Calls entry
+            var sqlInsert = allEntries.FirstOrDefault(e =>
+                e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase));
+
+            if (sqlInsert == null)
+                return (new List<LogEntry>(), callInfo);
+
+            // Parse full SQL (Message + SipRawBody for multi-line INSERTs)
+            var fullSql = string.IsNullOrEmpty(sqlInsert.SipRawBody)
+                ? sqlInsert.Message
+                : sqlInsert.Message + " " + sqlInsert.SipRawBody;
+            var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
+
+            if (cols.Count == 0)
+                return (new List<LogEntry>(), callInfo);
+
+            // Populate CallInfo PURELY from Calls table data
+            if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
+            if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
+            if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
+            if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
+            if (cols.TryGetValue("UserLogin", out var user)) callInfo.UserLogin = user;
+            if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
+            else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;
+            if (cols.TryGetValue("CallType", out var callType) &&
+                CallTypeNames.TryGetValue(callType, out var typeName))
+                callInfo.CallTypeName = $"{typeName} ({callType})";
+            if (cols.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
+                callInfo.Duration = durMs;
+
+            // Time bounds from Calls table
+            if (!DateTime.TryParse(callInfo.ServerStartDateTime, out var startTime))
+                return (new List<LogEntry>(), callInfo);
+
+            var endTime = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
+                ? startTime.AddMilliseconds(callInfo.Duration.Value)
+                : startTime;
+
+            callInfo.StartTime = startTime;
+            callInfo.EndTime = endTime;
+
+            // Filter log entries by exact time bounds from Calls
+            var matchedEntries = allEntries.Where(e =>
+                e.Timestamp >= startTime && e.Timestamp <= endTime
+            ).OrderBy(e => e.Timestamp).ToList();
+
+            foreach (var entry in matchedEntries)
+                sourceFiles.Add(entry.SourceFile);
+
+            callInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
+            return (matchedEntries, callInfo);
         }
 
     }
