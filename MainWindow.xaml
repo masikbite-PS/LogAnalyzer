@@ -173,6 +173,7 @@
                                                   CanUserAddRows="False" IsReadOnly="True"
                                                   SelectionUnit="Cell"
                                                   SelectionMode="Extended"
+                                                  ClipboardCopyMode="ExcludeHeader"
                                                   GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                                   BorderThickness="1" BorderBrush="#CCCCCC"
                                                   RowBackground="White" AlternatingRowBackground="#F8F8F8"
@@ -180,15 +181,17 @@
                                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="150"/>
-                                                <DataGridTextColumn Header="Value" Binding="{Binding DisplayValue}" Width="255">
-                                                    <DataGridTextColumn.ElementStyle>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="TextWrapping" Value="Wrap"/>
-                                                            <Setter Property="TextAlignment" Value="Left"/>
-                                                            <Setter Property="Padding" Value="5"/>
-                                                        </Style>
-                                                    </DataGridTextColumn.ElementStyle>
-                                                </DataGridTextColumn>
+                                                <DataGridTemplateColumn Header="Value" Width="255">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBox Text="{Binding DisplayValue, Mode=OneWay}"
+                                                                     IsReadOnly="True" BorderThickness="0"
+                                                                     Background="Transparent"
+                                                                     TextWrapping="Wrap" Padding="5"
+                                                                     VerticalAlignment="Stretch"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                                 <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="80"/>
                                                 <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
                                                     <DataGridTextColumn.ElementStyle>

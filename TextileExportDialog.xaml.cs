@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 
 namespace LogAnalyzer
@@ -15,8 +16,15 @@ namespace LogAnalyzer
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
-            Clipboard.SetText(TextileTextBox.Text);
-            MessageBox.Show("Textile format copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                Clipboard.SetDataObject(TextileContent, true);
+                MessageBox.Show("Textile format copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)

@@ -76,6 +76,16 @@ public partial class SipViewModel : ObservableObject
             return;
         }
 
+        var hasInvite = filtered.Any(m =>
+            m.CallId.Equals(sipCallId, StringComparison.OrdinalIgnoreCase) &&
+            m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
+
+        if (!hasInvite)
+        {
+            StatusMessage = "No INVITE found for this Call-ID — call flow not available";
+            return;
+        }
+
         // Group by Call-ID
         var groups = filtered.GroupBy(m => m.CallId).ToList();
 
@@ -131,9 +141,43 @@ public partial class SipViewModel : ObservableObject
 
         sb.AppendLine("h3. SIP Call Flow with Session Details");
         sb.AppendLine();
-        sb.AppendLine("bc.. " + MergedCallFlowDiagram.Replace("\n", "\nbc.. "));
-        sb.AppendLine();
+
+        foreach (var group in SipFlowGroups)
+        {
+            sb.AppendLine($"h4. Dialog: {EscapeTextile(group.CallId)}");
+            sb.AppendLine();
+
+            if (!string.IsNullOrEmpty(group.FlowSummary))
+            {
+                sb.AppendLine(group.FlowSummary);
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("|_.#|_.Time|_.From|_.To|_.Method|_.SDP|");
+            foreach (var msg in group.Messages)
+            {
+                var sdpInfo = SdpParser.Parse(msg.RawBody);
+                var from = msg.Direction == "Received" ? ExtractIp(msg.RemoteAddress) : "PBX";
+                var to   = msg.Direction == "Received" ? "PBX" : ExtractIp(msg.RemoteAddress);
+                sb.AppendLine($"|{msg.SequenceNumber}" +
+                              $"|{msg.Timestamp:HH:mm:ss.fff}" +
+                              $"|{EscapeTextile(from)}" +
+                              $"|{EscapeTextile(to)}" +
+                              $"|{EscapeTextile(msg.SipMethod)}" +
+                              $"|{EscapeTextile(sdpInfo.Summary)}|");
+            }
+            sb.AppendLine();
+        }
 
         return sb.ToString();
+    }
+
+    private static string EscapeTextile(string text) =>
+        string.IsNullOrEmpty(text) ? "" : text.Replace("|", "&#124;");
+
+    private static string ExtractIp(string remoteAddress)
+    {
+        if (string.IsNullOrWhiteSpace(remoteAddress)) return "";
+        return remoteAddress.Split(':')[0];
     }
 }
