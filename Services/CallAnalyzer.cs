@@ -115,7 +115,11 @@ namespace LogAnalyzer.Services
                     e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase));
                 if (sqlInsert != null)
                 {
-                    var (_, cols) = _sqlParser.ParseInsertStatement(sqlInsert.Message);
+                    // Combine Message + SipRawBody to handle multi-line INSERTs
+                    var fullSql = string.IsNullOrEmpty(sqlInsert.SipRawBody)
+                        ? sqlInsert.Message
+                        : sqlInsert.Message + " " + sqlInsert.SipRawBody;
+                    var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
 
                     // Build CallInfo directly from INSERT columns — do not re-derive from log entries
                     var callInfo = new CallInfo { CallId = logFilterId };
@@ -172,9 +176,9 @@ namespace LogAnalyzer.Services
                 }
             }
 
-            // Fallback: time-window approach (±5 min)
-            var timeWindowBefore = TimeSpan.FromMinutes(5);
-            var timeWindowAfter = TimeSpan.FromMinutes(5);
+            // Fallback: time-window approach (±3 sec) — narrow to avoid capturing other calls
+            var timeWindowBefore = TimeSpan.FromSeconds(3);
+            var timeWindowAfter = TimeSpan.FromSeconds(3);
             var searchStart = minTime.Add(-timeWindowBefore);
             var searchEnd = maxTime.Add(timeWindowAfter);
 
