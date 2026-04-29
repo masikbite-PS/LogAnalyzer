@@ -411,6 +411,50 @@ namespace LogAnalyzer.Services
 
         private readonly SqlParser _sqlParser = new();
 
+        private static string? ExtractPartnerChannelFromFoundPartner(List<LogEntry> allEntries, string callId)
+        {
+            // Trace format:
+            //   Component: Statistic::Manager::FoundPartner
+            //   Message:   callId=<SearchID> channel=<partner channel ID>
+            var entry = allEntries.FirstOrDefault(e =>
+                e.Component.Contains("FoundPartner", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains($"callId={callId}", StringComparison.OrdinalIgnoreCase));
+
+            if (entry == null) return null;
+
+            var match = Regex.Match(entry.Message, @"channel=(\d+)", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private void ExtractUserLoginFromAgentCalls(List<LogEntry> allEntries, CallInfo info)
+        {
+            var callId = info.CallId;
+
+            // Find exec InsertAgentCall entry that contains this callId
+            var agentEntry = allEntries.FirstOrDefault(e =>
+                e.Message.Contains("exec InsertAgentCall", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase));
+
+            if (agentEntry == null) return;
+
+            var fullText = string.IsNullOrEmpty(agentEntry.SipRawBody)
+                ? agentEntry.Message
+                : agentEntry.Message + " " + agentEntry.SipRawBody;
+
+            // First parameter after "exec InsertAgentCall" is AgentID (@userLogin), e.g. '8320'
+            // Format in logs: sql='exec InsertAgentCall '8320', 2, 'CALLID-GUID', ...
+            var match = Regex.Match(fullText,
+                @"exec\s+InsertAgentCall\s+'([^']+)'",
+                RegexOptions.IgnoreCase);
+
+            if (match.Success)
+            {
+                var agentId = match.Groups[1].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(agentId) && !agentId.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    info.UserLogin = agentId;
+            }
+        }
+
         private void ExtractCallsQueuesData(List<LogEntry> allEntries, CallInfo info)
         {
             var statRef = info.StatCallRef!;
@@ -422,13 +466,13 @@ namespace LogAnalyzer.Services
 
             foreach (var entry in cqEntries)
             {
-                var (_, cols) = _sqlParser.ParseInsertStatement(entry.Message);
-                if (!cols.TryGetValue("CallId", out var cqCallId) ||
-                    !cqCallId.Equals(statRef, StringComparison.OrdinalIgnoreCase))
+                var fullSql = string.IsNullOrEmpty(entry.SipRawBody)
+                    ? entry.Message
+                    : entry.Message + " " + entry.SipRawBody;
+                var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
+                if (!cols.TryGetValue("CallRef", out var cqCallRef) ||
+                    !cqCallRef.Equals(statRef, StringComparison.OrdinalIgnoreCase))
                     continue;
-
-                if (cols.TryGetValue("UserLogin", out var user) && !string.IsNullOrWhiteSpace(user) && user != "null")
-                    info.UserLogin = user;
 
                 if (cols.TryGetValue("ChannelNumber", out var ch) && !string.IsNullOrWhiteSpace(ch) && ch != "null"
                     && !info.CallsQueuesChannelIds.Contains(ch))
@@ -505,24 +549,38 @@ namespace LogAnalyzer.Services
             if (cols.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
                 callInfo.Duration = durMs;
 
-            // Time bounds from Calls table
-            if (!DateTime.TryParse(callInfo.ServerStartDateTime, out var startTime))
+            // Time bounds from Calls table — supports formats like '20250623 07:46:28' and ISO formats
+            var formats = new[]
+            {
+                "yyyyMMdd HH:mm:ss", "yyyyMMdd HH:mm:ss.fff",
+                "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.fff",
+                "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff"
+            };
+            DateTime startTime;
+            if (!DateTime.TryParseExact(callInfo.ServerStartDateTime, formats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out startTime) &&
+                !DateTime.TryParse(callInfo.ServerStartDateTime, out startTime))
                 return (new List<LogEntry>(), callInfo);
 
+            // Duration is in seconds (DurationSec)
             var endTime = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
-                ? startTime.AddMilliseconds(callInfo.Duration.Value)
+                ? startTime.AddSeconds(callInfo.Duration.Value)
                 : startTime;
 
             callInfo.StartTime = startTime;
             callInfo.EndTime = endTime;
 
-            // Set StatCallRef for CallsQueues lookup
+            // Set StatCallRef for AgentCalls/CallsQueues lookup
             callInfo.StatCallRef = callId;
+            ExtractUserLoginFromAgentCalls(allEntries, callInfo);
             ExtractCallsQueuesData(allEntries, callInfo);
 
-            // Update UserLogin from CallsQueues if available
-            if (!string.IsNullOrEmpty(callInfo.UserLogin))
-                ; // Already set from CallsQueues
+            // Extract partner channel from FoundPartner trace and add to channel list for Scripts
+            var partnerChannel = ExtractPartnerChannelFromFoundPartner(allEntries, callId);
+            if (!string.IsNullOrEmpty(partnerChannel) &&
+                !callInfo.CallsQueuesChannelIds.Contains(partnerChannel))
+                callInfo.CallsQueuesChannelIds.Add(partnerChannel);
 
             // Build channel set: Calls channel + CallsQueues channels
             var channelIds = new HashSet<string>();
@@ -531,13 +589,12 @@ namespace LogAnalyzer.Services
             foreach (var ch in callInfo.CallsQueuesChannelIds)
                 channelIds.Add(ch);
 
-            // Filter log entries: time bounds [start - 5s, end + 5s] for Scripts/Log context
+            // Filter log entries: all traces within call duration [start - 5s, end + 5s]
             var logStartTime = startTime.AddSeconds(-5);
             var logEndTime = endTime.AddSeconds(5);
 
             var matchedEntries = allEntries.Where(e =>
-                e.Timestamp >= logStartTime && e.Timestamp <= logEndTime &&
-                (channelIds.Count == 0 || MatchesChannel(e.Message, channelIds))
+                e.Timestamp >= logStartTime && e.Timestamp <= logEndTime
             ).OrderBy(e => e.Timestamp).ToList();
 
             foreach (var entry in matchedEntries)
