@@ -115,8 +115,7 @@ namespace LogAnalyzer.ViewModels
                 if (!string.IsNullOrWhiteSpace(CallId))
                 {
                     StatusMessage = $"Analyzing call {CallId}...";
-                    var result = _analyzer.AnalyzeCall(allEntries, CallId, sipMessages,
-                        !string.IsNullOrWhiteSpace(SipCallId) ? SipCallId : null);
+                    var result = _analyzer.AnalyzeCall(allEntries, CallId, sipMessages);
                     filteredEntries = result.Item1;
                     callInfo = result.Item2;
                 }

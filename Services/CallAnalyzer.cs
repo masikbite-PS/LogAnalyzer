@@ -10,11 +10,8 @@ namespace LogAnalyzer.Services
     public class CallAnalyzer
     {
         public (List<LogEntry> entries, CallInfo info) AnalyzeCall(
-            List<LogEntry> allEntries, string callId, List<SipMessage>? sipMessages = null,
-            string? sipCallId = null)
+            List<LogEntry> allEntries, string callId, List<SipMessage>? sipMessages = null)
         {
-            // Use SIP Call-ID for SIP-based lookups when provided separately
-            var sipIdForSearch = !string.IsNullOrEmpty(sipCallId) ? sipCallId : callId;
             var sourceFiles = new HashSet<string>();
 
             // Find initial matches by callId in Message or SipRawBody
@@ -45,16 +42,16 @@ namespace LogAnalyzer.Services
             HashSet<string> partnerSipCallIds = new();
 
             // Channel-based filtering when SIP messages are available
-            var sipNumbers = ExtractSipNumbers(sipMessages, sipIdForSearch);
+            var sipNumbers = ExtractSipNumbers(sipMessages, callId);
             if (sipNumbers.Count > 0)
             {
                 channelIds = FindChannelIds(allEntries, sipNumbers);
-                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipIdForSearch);
+                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, callId);
             }
 
             // Use INVITE timestamp as the lower bound (–5 s) to exclude unrelated pre-call traces
             var primaryInvite = sipMessages?.FirstOrDefault(m =>
-                m.CallId.Equals(sipIdForSearch, StringComparison.OrdinalIgnoreCase) &&
+                m.CallId.Equals(callId, StringComparison.OrdinalIgnoreCase) &&
                 m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
             var inviteStart = primaryInvite != null
                 ? primaryInvite.Timestamp.AddSeconds(-5)
