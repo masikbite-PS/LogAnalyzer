@@ -274,9 +274,18 @@ namespace LogAnalyzer.Services
 
             if (string.IsNullOrEmpty(searchNumber)) return result;
 
+            // Window: 5 s before primary INVITE → 5 s after primary BYE
+            var bye = sipMessages.LastOrDefault(m =>
+                m.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase) &&
+                m.SipMethod.Equals("BYE", StringComparison.OrdinalIgnoreCase));
+            var windowStart = invite.Timestamp.AddSeconds(-5);
+            var windowEnd = (bye?.Timestamp ?? invite.Timestamp).AddSeconds(5);
+
             foreach (var msg in sipMessages)
             {
                 if (msg.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!msg.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase)) continue;
+                if (msg.Timestamp < windowStart || msg.Timestamp > windowEnd) continue;
 
                 string candidate;
                 if (invite.Direction.Equals("Received", StringComparison.OrdinalIgnoreCase))
