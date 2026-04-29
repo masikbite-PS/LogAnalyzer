@@ -108,6 +108,70 @@ namespace LogAnalyzer.Services
                 return (matchedEntries, fullInfo);
             }
 
+            // For pbxCallId-only: Calls INSERT is the single source of truth
+            if (sipLookupId == null)
+            {
+                var sqlInsert = initialMatches.FirstOrDefault(e =>
+                    e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase));
+                if (sqlInsert != null)
+                {
+                    var (_, cols) = _sqlParser.ParseInsertStatement(sqlInsert.Message);
+
+                    // Build CallInfo directly from INSERT columns — do not re-derive from log entries
+                    var callInfo = new CallInfo { CallId = logFilterId };
+                    ExtractFromSql(sqlInsert.Message, callInfo);
+                    callInfo.StatCallRef = logFilterId; // Calls.Id IS the StatCallRef
+                    ExtractCallsQueuesData(allEntries, callInfo);
+
+                    // Determine time bounds: ServerStartDateTime is the anchor
+                    var sdtRaw = cols.TryGetValue("ServerStartDateTime", out var s1) ? s1
+                               : cols.TryGetValue("StartTime", out var s2) ? s2 : null;
+                    if (sdtRaw != null && DateTime.TryParse(sdtRaw, out var callStartTime))
+                    {
+                        var callStart = callStartTime.AddSeconds(-5);
+                        var callEnd = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
+                            ? callStartTime.AddMilliseconds(callInfo.Duration.Value).AddSeconds(5)
+                            : sqlInsert.Timestamp.AddSeconds(5);
+
+                        // Channel filter: use ChannelNumber from Calls + CallsQueues channels
+                        if (!string.IsNullOrEmpty(callInfo.ChannelNumber))
+                        {
+                            channelIds = new HashSet<string> { callInfo.ChannelNumber };
+                            foreach (var ch in callInfo.CallsQueuesChannelIds)
+                                channelIds.Add(ch);
+
+                            matchedEntries = allEntries.Where(e =>
+                                e.Timestamp >= callStart && e.Timestamp <= callEnd &&
+                                MatchesChannel(e.Message, channelIds)
+                            ).OrderBy(e => e.Timestamp).ToList();
+
+                            if (!matchedEntries.Contains(sqlInsert))
+                                matchedEntries = matchedEntries.Append(sqlInsert).OrderBy(e => e.Timestamp).ToList();
+
+                            var partnerChannelIds = ExtractPartnerChannelIds(matchedEntries);
+                            if (partnerChannelIds.Count > 0)
+                            {
+                                foreach (var pid in partnerChannelIds) channelIds.Add(pid);
+                                var partnerEntries = allEntries.Where(e =>
+                                    e.Timestamp >= callStart && e.Timestamp <= callEnd &&
+                                    MatchesChannel(e.Message, partnerChannelIds));
+                                matchedEntries = matchedEntries.Union(partnerEntries)
+                                    .OrderBy(e => e.Timestamp).ToList();
+                            }
+
+                            foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
+                            callInfo.PartnerChannelIds = channelIds.ToList();
+                            callInfo.StartTime = callStartTime;
+                            callInfo.EndTime = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
+                                ? callStartTime.AddMilliseconds(callInfo.Duration.Value)
+                                : null;
+                            callInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
+                            return (matchedEntries, callInfo);
+                        }
+                    }
+                }
+            }
+
             // Fallback: time-window approach (±5 min)
             var timeWindowBefore = TimeSpan.FromMinutes(5);
             var timeWindowAfter = TimeSpan.FromMinutes(5);
