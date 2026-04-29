@@ -121,9 +121,21 @@ namespace LogAnalyzer.Services
                         : sqlInsert.Message + " " + sqlInsert.SipRawBody;
                     var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
 
-                    // Build CallInfo directly from INSERT columns — do not re-derive from log entries
+                    // Build CallInfo directly from parsed columns (not from Message-only)
                     var callInfo = new CallInfo { CallId = logFilterId };
-                    ExtractFromSql(sqlInsert.Message, callInfo);
+                    if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
+                    if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
+                    if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
+                    if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
+                    if (cols.TryGetValue("UserLogin", out var user)) callInfo.UserLogin = user;
+                    if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
+                    else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;
+                    if (cols.TryGetValue("CallType", out var callType) &&
+                        CallTypeNames.TryGetValue(callType, out var typeName))
+                        callInfo.CallTypeName = $"{typeName} ({callType})";
+                    if (cols.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
+                        callInfo.Duration = durMs;
+
                     callInfo.StatCallRef = logFilterId; // Calls.Id IS the StatCallRef
                     ExtractCallsQueuesData(allEntries, callInfo);
 
