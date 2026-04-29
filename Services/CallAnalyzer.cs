@@ -14,15 +14,38 @@ namespace LogAnalyzer.Services
             List<LogEntry> allEntries, string? pbxCallId, string? sipCallId,
             List<SipMessage>? sipMessages = null)
         {
-            // CallID-only path: isolated logic, no SIP interference
-            if (!string.IsNullOrWhiteSpace(pbxCallId) && string.IsNullOrWhiteSpace(sipCallId))
-                return AnalyzeCallIdOnly(allEntries, pbxCallId);
+            var hasPbx = !string.IsNullOrWhiteSpace(pbxCallId);
+            var hasSip = !string.IsNullOrWhiteSpace(sipCallId);
 
+            // Three isolated scenarios — each has its own self-contained method.
+            // Debugging one must NOT affect the others.
+            if (hasPbx && !hasSip) return AnalyzeCallIdOnly(allEntries, pbxCallId!);
+            if (!hasPbx && hasSip) return AnalyzeSipOnly(allEntries, sipCallId!, sipMessages);
+            return AnalyzeBoth(allEntries, pbxCallId!, sipCallId!, sipMessages);
+        }
+
+        // Isolated SIP-only path: no PBX CallID provided, search by SIP Call-ID
+        private (List<LogEntry> entries, CallInfo info) AnalyzeSipOnly(
+            List<LogEntry> allEntries, string sipCallId, List<SipMessage>? sipMessages)
+        {
+            return AnalyzeBySipLookup(allEntries, logFilterId: sipCallId, sipLookupId: sipCallId, sipMessages);
+        }
+
+        // Isolated Both path: PBX CallID + SIP Call-ID provided
+        private (List<LogEntry> entries, CallInfo info) AnalyzeBoth(
+            List<LogEntry> allEntries, string pbxCallId, string sipCallId, List<SipMessage>? sipMessages)
+        {
+            return AnalyzeBySipLookup(allEntries, logFilterId: pbxCallId, sipLookupId: sipCallId, sipMessages);
+        }
+
+        // Shared SIP-aware analysis — used by AnalyzeSipOnly and AnalyzeBoth.
+        // The two callers differ only in which ID is used for log filtering vs SIP lookup,
+        // so logic is identical otherwise. Inline if scenarios diverge in future debugging.
+        private (List<LogEntry> entries, CallInfo info) AnalyzeBySipLookup(
+            List<LogEntry> allEntries, string logFilterId, string sipLookupId,
+            List<SipMessage>? sipMessages)
+        {
             var sourceFiles = new HashSet<string>();
-            // logFilterId: used for PBX log entry matching (prefer PBX CallID, fall back to SIP Call-ID)
-            // sipLookupId: used exclusively for SIP message lookups (phone number extraction, partner search)
-            var logFilterId = pbxCallId ?? sipCallId ?? "";
-            var sipLookupId = sipCallId;
 
             // Find initial matches by logFilterId in Message or SipRawBody
             var escapedCallId = Regex.Escape(logFilterId);
@@ -51,20 +74,18 @@ namespace LogAnalyzer.Services
             HashSet<string> channelIds = new();
             HashSet<string> partnerSipCallIds = new();
 
-            // Channel-based filtering: only when sipLookupId is available (SIP Call-ID known)
-            var sipNumbers = sipLookupId != null
-                ? ExtractSipNumbers(sipMessages, sipLookupId)
-                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Channel-based filtering: SIP lookup is always available in these paths
+            var sipNumbers = ExtractSipNumbers(sipMessages, sipLookupId);
             if (sipNumbers.Count > 0)
             {
                 channelIds = FindChannelIds(allEntries, sipNumbers);
-                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipLookupId!);
+                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipLookupId);
             }
 
             // Use INVITE timestamp as the lower bound (–5 s) to exclude unrelated pre-call traces
-            var primaryInvite = sipLookupId != null ? sipMessages?.FirstOrDefault(m =>
+            var primaryInvite = sipMessages?.FirstOrDefault(m =>
                 m.CallId.Equals(sipLookupId, StringComparison.OrdinalIgnoreCase) &&
-                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase)) : null;
+                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
             var inviteStart = primaryInvite != null
                 ? primaryInvite.Timestamp.AddSeconds(-5)
                 : minTime;
@@ -76,7 +97,7 @@ namespace LogAnalyzer.Services
                     e.Timestamp >= inviteStart &&
                     (MatchesChannel(e.Message, channelIds) ||
                     (e.SipRawBody.Length > 0 && (
-                        (sipLookupId != null && e.SipRawBody.Contains(sipLookupId, StringComparison.OrdinalIgnoreCase)) ||
+                        e.SipRawBody.Contains(sipLookupId, StringComparison.OrdinalIgnoreCase) ||
                         partnerSipCallIds.Any(p => e.SipRawBody.Contains(p, StringComparison.OrdinalIgnoreCase))
                     )))
                 ).OrderBy(e => e.Timestamp).ToList();
@@ -107,12 +128,14 @@ namespace LogAnalyzer.Services
                 fullInfo.StatCallRef = callInfo.StatCallRef;
                 fullInfo.InviteStartTime = inviteStart;
                 if (!string.IsNullOrEmpty(fullInfo.StatCallRef))
+                {
+                    ExtractUserLoginFromAgentCalls(allEntries, fullInfo);
                     ExtractCallsQueuesData(allEntries, fullInfo);
+                }
                 foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
                 fullInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
                 return (matchedEntries, fullInfo);
             }
-
 
             // Fallback: time-window approach (±3 sec) — narrow to avoid capturing other calls
             var timeWindowBefore = TimeSpan.FromSeconds(3);
@@ -428,12 +451,15 @@ namespace LogAnalyzer.Services
 
         private void ExtractUserLoginFromAgentCalls(List<LogEntry> allEntries, CallInfo info)
         {
-            var callId = info.CallId;
+            // AgentCalls is keyed by CallRef. In CallID-only path it equals user-input CallID,
+            // in SIP-only/Both it's the StatCallRef extracted from logs.
+            var lookupId = !string.IsNullOrWhiteSpace(info.StatCallRef) ? info.StatCallRef! : info.CallId;
+            if (string.IsNullOrWhiteSpace(lookupId)) return;
 
-            // Find exec InsertAgentCall entry that contains this callId
+            // Find exec InsertAgentCall entry that contains this lookupId
             var agentEntry = allEntries.FirstOrDefault(e =>
                 e.Message.Contains("exec InsertAgentCall", StringComparison.OrdinalIgnoreCase) &&
-                e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase));
+                e.Message.Contains(lookupId, StringComparison.OrdinalIgnoreCase));
 
             if (agentEntry == null) return;
 
