@@ -10,12 +10,17 @@ namespace LogAnalyzer.Services
     public class CallAnalyzer
     {
         public (List<LogEntry> entries, CallInfo info) AnalyzeCall(
-            List<LogEntry> allEntries, string callId, List<SipMessage>? sipMessages = null)
+            List<LogEntry> allEntries, string? pbxCallId, string? sipCallId,
+            List<SipMessage>? sipMessages = null)
         {
             var sourceFiles = new HashSet<string>();
+            // logFilterId: used for PBX log entry matching (prefer PBX CallID, fall back to SIP Call-ID)
+            // sipLookupId: used exclusively for SIP message lookups (phone number extraction, partner search)
+            var logFilterId = pbxCallId ?? sipCallId ?? "";
+            var sipLookupId = sipCallId;
 
-            // Find initial matches by callId in Message or SipRawBody
-            var escapedCallId = Regex.Escape(callId);
+            // Find initial matches by logFilterId in Message or SipRawBody
+            var escapedCallId = Regex.Escape(logFilterId);
             var pattern = $"(CallID|ID)\\s*=\\s*['\"]?{escapedCallId}['\"]?";
             var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -25,13 +30,13 @@ namespace LogAnalyzer.Services
             if (initialMatches.Count == 0)
             {
                 initialMatches = allEntries.Where(e =>
-                    e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
-                    e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase)).ToList();
+                    e.Message.Contains(logFilterId, StringComparison.OrdinalIgnoreCase) ||
+                    e.SipRawBody.Contains(logFilterId, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
             if (initialMatches.Count == 0)
             {
-                return (new List<LogEntry>(), new CallInfo { CallId = callId });
+                return (new List<LogEntry>(), new CallInfo { CallId = logFilterId });
             }
 
             var minTime = initialMatches.Min(e => e.Timestamp);
@@ -41,18 +46,20 @@ namespace LogAnalyzer.Services
             HashSet<string> channelIds = new();
             HashSet<string> partnerSipCallIds = new();
 
-            // Channel-based filtering when SIP messages are available
-            var sipNumbers = ExtractSipNumbers(sipMessages, callId);
+            // Channel-based filtering: only when sipLookupId is available (SIP Call-ID known)
+            var sipNumbers = sipLookupId != null
+                ? ExtractSipNumbers(sipMessages, sipLookupId)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (sipNumbers.Count > 0)
             {
                 channelIds = FindChannelIds(allEntries, sipNumbers);
-                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, callId);
+                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipLookupId!);
             }
 
             // Use INVITE timestamp as the lower bound (–5 s) to exclude unrelated pre-call traces
-            var primaryInvite = sipMessages?.FirstOrDefault(m =>
-                m.CallId.Equals(callId, StringComparison.OrdinalIgnoreCase) &&
-                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
+            var primaryInvite = sipLookupId != null ? sipMessages?.FirstOrDefault(m =>
+                m.CallId.Equals(sipLookupId, StringComparison.OrdinalIgnoreCase) &&
+                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase)) : null;
             var inviteStart = primaryInvite != null
                 ? primaryInvite.Timestamp.AddSeconds(-5)
                 : minTime;
@@ -64,7 +71,7 @@ namespace LogAnalyzer.Services
                     e.Timestamp >= inviteStart &&
                     (MatchesChannel(e.Message, channelIds) ||
                     (e.SipRawBody.Length > 0 && (
-                        e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
+                        (sipLookupId != null && e.SipRawBody.Contains(sipLookupId, StringComparison.OrdinalIgnoreCase)) ||
                         partnerSipCallIds.Any(p => e.SipRawBody.Contains(p, StringComparison.OrdinalIgnoreCase))
                     )))
                 ).OrderBy(e => e.Timestamp).ToList();
@@ -81,13 +88,13 @@ namespace LogAnalyzer.Services
                 }
 
                 // Extract refs first so SQL INSERT entries get added to matchedEntries
-                var callInfo = new CallInfo { CallId = callId };
+                var callInfo = new CallInfo { CallId = logFilterId };
                 callInfo.PartnerChannelIds = channelIds.ToList();
                 callInfo.PartnerSipCallIds = partnerSipCallIds.ToList();
                 ExtractCallRefs(allEntries, ref matchedEntries, callInfo, minTime, maxTime);
 
                 // Now ExtractCallInfo can find SQL INSERT entries pulled in above
-                var fullInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+                var fullInfo = ExtractCallInfo(matchedEntries, logFilterId, sourceFiles, minTime, maxTime);
                 fullInfo.PartnerChannelIds = callInfo.PartnerChannelIds;
                 fullInfo.PartnerSipCallIds = callInfo.PartnerSipCallIds;
                 fullInfo.LogicalCallRef = callInfo.LogicalCallRef;
@@ -130,7 +137,7 @@ namespace LogAnalyzer.Services
             }
 
             foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
-            var info = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+            var info = ExtractCallInfo(matchedEntries, logFilterId, sourceFiles, minTime, maxTime);
             info.PartnerChannelIds = partnerIds.ToList();
             ExtractCallRefs(allEntries, ref matchedEntries, info, minTime, maxTime);
             return (matchedEntries, info);
@@ -274,9 +281,16 @@ namespace LogAnalyzer.Services
 
             if (string.IsNullOrEmpty(searchNumber)) return result;
 
+            // Only look at INVITEs within ±3 minutes of the primary INVITE to avoid matching
+            // unrelated calls from the same number across the entire log history
+            var windowStart = invite.Timestamp.AddMinutes(-3);
+            var windowEnd = invite.Timestamp.AddMinutes(3);
+
             foreach (var msg in sipMessages)
             {
                 if (msg.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!msg.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase)) continue;
+                if (msg.Timestamp < windowStart || msg.Timestamp > windowEnd) continue;
 
                 string candidate;
                 if (invite.Direction.Equals("Received", StringComparison.OrdinalIgnoreCase))
