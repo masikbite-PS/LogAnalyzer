@@ -9,13 +9,46 @@ namespace LogAnalyzer.Services
 {
     public class CallAnalyzer
     {
+
         public (List<LogEntry> entries, CallInfo info) AnalyzeCall(
-            List<LogEntry> allEntries, string callId, List<SipMessage>? sipMessages = null)
+            List<LogEntry> allEntries, string? pbxCallId, string? sipCallId,
+            List<SipMessage>? sipMessages = null)
+        {
+            var hasPbx = !string.IsNullOrWhiteSpace(pbxCallId);
+            var hasSip = !string.IsNullOrWhiteSpace(sipCallId);
+
+            // Three isolated scenarios — each has its own self-contained method.
+            // Debugging one must NOT affect the others.
+            if (hasPbx && !hasSip) return AnalyzeCallIdOnly(allEntries, pbxCallId!);
+            if (!hasPbx && hasSip) return AnalyzeSipOnly(allEntries, sipCallId!, sipMessages);
+            return AnalyzeBoth(allEntries, pbxCallId!, sipCallId!, sipMessages);
+        }
+
+        // Isolated SIP-only path: no PBX CallID provided, search by SIP Call-ID
+        private (List<LogEntry> entries, CallInfo info) AnalyzeSipOnly(
+            List<LogEntry> allEntries, string sipCallId, List<SipMessage>? sipMessages)
+        {
+            return AnalyzeBySipLookup(allEntries, logFilterId: sipCallId, sipLookupId: sipCallId, sipMessages);
+        }
+
+        // Isolated Both path: PBX CallID + SIP Call-ID provided
+        private (List<LogEntry> entries, CallInfo info) AnalyzeBoth(
+            List<LogEntry> allEntries, string pbxCallId, string sipCallId, List<SipMessage>? sipMessages)
+        {
+            return AnalyzeBySipLookup(allEntries, logFilterId: pbxCallId, sipLookupId: sipCallId, sipMessages);
+        }
+
+        // Shared SIP-aware analysis — used by AnalyzeSipOnly and AnalyzeBoth.
+        // The two callers differ only in which ID is used for log filtering vs SIP lookup,
+        // so logic is identical otherwise. Inline if scenarios diverge in future debugging.
+        private (List<LogEntry> entries, CallInfo info) AnalyzeBySipLookup(
+            List<LogEntry> allEntries, string logFilterId, string sipLookupId,
+            List<SipMessage>? sipMessages)
         {
             var sourceFiles = new HashSet<string>();
 
-            // Find initial matches by callId in Message or SipRawBody
-            var escapedCallId = Regex.Escape(callId);
+            // Find initial matches by logFilterId in Message or SipRawBody
+            var escapedCallId = Regex.Escape(logFilterId);
             var pattern = $"(CallID|ID)\\s*=\\s*['\"]?{escapedCallId}['\"]?";
             var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -25,13 +58,13 @@ namespace LogAnalyzer.Services
             if (initialMatches.Count == 0)
             {
                 initialMatches = allEntries.Where(e =>
-                    e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
-                    e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase)).ToList();
+                    e.Message.Contains(logFilterId, StringComparison.OrdinalIgnoreCase) ||
+                    e.SipRawBody.Contains(logFilterId, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
             if (initialMatches.Count == 0)
             {
-                return (new List<LogEntry>(), new CallInfo { CallId = callId });
+                return (new List<LogEntry>(), new CallInfo { CallId = logFilterId });
             }
 
             var minTime = initialMatches.Min(e => e.Timestamp);
@@ -41,23 +74,32 @@ namespace LogAnalyzer.Services
             HashSet<string> channelIds = new();
             HashSet<string> partnerSipCallIds = new();
 
-            // Channel-based filtering when SIP messages are available
-            var sipNumbers = ExtractSipNumbers(sipMessages, callId);
+            // Channel-based filtering: SIP lookup is always available in these paths
+            var sipNumbers = ExtractSipNumbers(sipMessages, sipLookupId);
             if (sipNumbers.Count > 0)
             {
                 channelIds = FindChannelIds(allEntries, sipNumbers);
-                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipNumbers, callId);
+                partnerSipCallIds = FindPartnerSipCallIds(sipMessages!, sipLookupId);
             }
+
+            // Use INVITE timestamp as the lower bound (–5 s) to exclude unrelated pre-call traces
+            var primaryInvite = sipMessages?.FirstOrDefault(m =>
+                m.CallId.Equals(sipLookupId, StringComparison.OrdinalIgnoreCase) &&
+                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
+            var inviteStart = primaryInvite != null
+                ? primaryInvite.Timestamp.AddSeconds(-5)
+                : minTime;
 
             if (channelIds.Count > 0)
             {
-                // Filter strictly by channel IDs and SIP Call-IDs
+                // Filter strictly by channel IDs and SIP Call-IDs, starting from INVITE time
                 matchedEntries = allEntries.Where(e =>
-                    MatchesChannel(e.Message, channelIds) ||
+                    e.Timestamp >= inviteStart &&
+                    (MatchesChannel(e.Message, channelIds) ||
                     (e.SipRawBody.Length > 0 && (
-                        e.SipRawBody.Contains(callId, StringComparison.OrdinalIgnoreCase) ||
+                        e.SipRawBody.Contains(sipLookupId, StringComparison.OrdinalIgnoreCase) ||
                         partnerSipCallIds.Any(p => e.SipRawBody.Contains(p, StringComparison.OrdinalIgnoreCase))
-                    ))
+                    )))
                 ).OrderBy(e => e.Timestamp).ToList();
 
                 // Find partner channels from Switch statements and add their entries
@@ -65,32 +107,39 @@ namespace LogAnalyzer.Services
                 if (partnerChannelIds.Count > 0)
                 {
                     foreach (var pid in partnerChannelIds) channelIds.Add(pid);
-                    var partnerEntries = allEntries.Where(e => MatchesChannel(e.Message, partnerChannelIds));
+                    var partnerEntries = allEntries.Where(e =>
+                        e.Timestamp >= inviteStart && MatchesChannel(e.Message, partnerChannelIds));
                     matchedEntries = matchedEntries.Union(partnerEntries)
                         .OrderBy(e => e.Timestamp).ToList();
                 }
 
                 // Extract refs first so SQL INSERT entries get added to matchedEntries
-                var callInfo = new CallInfo { CallId = callId };
+                var callInfo = new CallInfo { CallId = logFilterId };
                 callInfo.PartnerChannelIds = channelIds.ToList();
                 callInfo.PartnerSipCallIds = partnerSipCallIds.ToList();
                 ExtractCallRefs(allEntries, ref matchedEntries, callInfo, minTime, maxTime);
 
                 // Now ExtractCallInfo can find SQL INSERT entries pulled in above
-                var fullInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+                var fullInfo = ExtractCallInfo(matchedEntries, logFilterId, sourceFiles, minTime, maxTime);
                 fullInfo.PartnerChannelIds = callInfo.PartnerChannelIds;
                 fullInfo.PartnerSipCallIds = callInfo.PartnerSipCallIds;
                 fullInfo.LogicalCallRef = callInfo.LogicalCallRef;
                 fullInfo.PhysicalCallRef = callInfo.PhysicalCallRef;
                 fullInfo.StatCallRef = callInfo.StatCallRef;
+                fullInfo.InviteStartTime = inviteStart;
+                if (!string.IsNullOrEmpty(fullInfo.StatCallRef))
+                {
+                    ExtractUserLoginFromAgentCalls(allEntries, fullInfo);
+                    ExtractCallsQueuesData(allEntries, fullInfo);
+                }
                 foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
                 fullInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
                 return (matchedEntries, fullInfo);
             }
 
-            // Fallback: time-window approach (±5 min)
-            var timeWindowBefore = TimeSpan.FromMinutes(5);
-            var timeWindowAfter = TimeSpan.FromMinutes(5);
+            // Fallback: time-window approach (±3 sec) — narrow to avoid capturing other calls
+            var timeWindowBefore = TimeSpan.FromSeconds(3);
+            var timeWindowAfter = TimeSpan.FromSeconds(3);
             var searchStart = minTime.Add(-timeWindowBefore);
             var searchEnd = maxTime.Add(timeWindowAfter);
 
@@ -117,7 +166,7 @@ namespace LogAnalyzer.Services
             }
 
             foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
-            var info = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
+            var info = ExtractCallInfo(matchedEntries, logFilterId, sourceFiles, minTime, maxTime);
             info.PartnerChannelIds = partnerIds.ToList();
             ExtractCallRefs(allEntries, ref matchedEntries, info, minTime, maxTime);
             return (matchedEntries, info);
@@ -243,17 +292,45 @@ namespace LogAnalyzer.Services
         }
 
         private static HashSet<string> FindPartnerSipCallIds(
-            List<SipMessage> sipMessages, HashSet<string> numbers, string primaryCallId)
+            List<SipMessage> sipMessages, string primaryCallId)
         {
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var invite = sipMessages.FirstOrDefault(m =>
+                m.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase) &&
+                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
+
+            if (invite == null) return result;
+
+            string searchNumber;
+            if (invite.Direction.Equals("Received", StringComparison.OrdinalIgnoreCase))
+                searchNumber = NormalizeNumber(invite.FromNumber);
+            else
+                searchNumber = NormalizeNumber(invite.ToNumber);
+
+            if (string.IsNullOrEmpty(searchNumber)) return result;
+
+            // Only look at INVITEs within ±3 minutes of the primary INVITE to avoid matching
+            // unrelated calls from the same number across the entire log history
+            var windowStart = invite.Timestamp.AddMinutes(-3);
+            var windowEnd = invite.Timestamp.AddMinutes(3);
+
             foreach (var msg in sipMessages)
             {
                 if (msg.CallId.Equals(primaryCallId, StringComparison.OrdinalIgnoreCase)) continue;
-                var from = NormalizeNumber(msg.FromNumber);
-                var to = NormalizeNumber(msg.ToNumber);
-                if (numbers.Contains(from) || numbers.Contains(to))
+                if (!msg.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase)) continue;
+                if (msg.Timestamp < windowStart || msg.Timestamp > windowEnd) continue;
+
+                string candidate;
+                if (invite.Direction.Equals("Received", StringComparison.OrdinalIgnoreCase))
+                    candidate = NormalizeNumber(msg.FromNumber);
+                else
+                    candidate = NormalizeNumber(msg.ToNumber);
+
+                if (candidate.Equals(searchNumber, StringComparison.OrdinalIgnoreCase))
                     result.Add(msg.CallId);
             }
+
             return result;
         }
 
@@ -357,6 +434,78 @@ namespace LogAnalyzer.Services
 
         private readonly SqlParser _sqlParser = new();
 
+        private static string? ExtractPartnerChannelFromFoundPartner(List<LogEntry> allEntries, string callId)
+        {
+            // Trace format:
+            //   Component: Statistic::Manager::FoundPartner
+            //   Message:   callId=<SearchID> channel=<partner channel ID>
+            var entry = allEntries.FirstOrDefault(e =>
+                e.Component.Contains("FoundPartner", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains($"callId={callId}", StringComparison.OrdinalIgnoreCase));
+
+            if (entry == null) return null;
+
+            var match = Regex.Match(entry.Message, @"channel=(\d+)", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private void ExtractUserLoginFromAgentCalls(List<LogEntry> allEntries, CallInfo info)
+        {
+            // AgentCalls is keyed by CallRef. In CallID-only path it equals user-input CallID,
+            // in SIP-only/Both it's the StatCallRef extracted from logs.
+            var lookupId = !string.IsNullOrWhiteSpace(info.StatCallRef) ? info.StatCallRef! : info.CallId;
+            if (string.IsNullOrWhiteSpace(lookupId)) return;
+
+            // Find exec InsertAgentCall entry that contains this lookupId
+            var agentEntry = allEntries.FirstOrDefault(e =>
+                e.Message.Contains("exec InsertAgentCall", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains(lookupId, StringComparison.OrdinalIgnoreCase));
+
+            if (agentEntry == null) return;
+
+            var fullText = string.IsNullOrEmpty(agentEntry.SipRawBody)
+                ? agentEntry.Message
+                : agentEntry.Message + " " + agentEntry.SipRawBody;
+
+            // First parameter after "exec InsertAgentCall" is AgentID (@userLogin), e.g. '8320'
+            // Format in logs: sql='exec InsertAgentCall '8320', 2, 'CALLID-GUID', ...
+            var match = Regex.Match(fullText,
+                @"exec\s+InsertAgentCall\s+'([^']+)'",
+                RegexOptions.IgnoreCase);
+
+            if (match.Success)
+            {
+                var agentId = match.Groups[1].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(agentId) && !agentId.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    info.UserLogin = agentId;
+            }
+        }
+
+        private void ExtractCallsQueuesData(List<LogEntry> allEntries, CallInfo info)
+        {
+            var statRef = info.StatCallRef!;
+            var cqEntries = allEntries
+                .Where(e => e.Message.Contains("insert into CallsQueues", StringComparison.OrdinalIgnoreCase)
+                         && e.Message.Contains(statRef, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.Timestamp)
+                .ToList();
+
+            foreach (var entry in cqEntries)
+            {
+                var fullSql = string.IsNullOrEmpty(entry.SipRawBody)
+                    ? entry.Message
+                    : entry.Message + " " + entry.SipRawBody;
+                var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
+                if (!cols.TryGetValue("CallRef", out var cqCallRef) ||
+                    !cqCallRef.Equals(statRef, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (cols.TryGetValue("ChannelNumber", out var ch) && !string.IsNullOrWhiteSpace(ch) && ch != "null"
+                    && !info.CallsQueuesChannelIds.Contains(ch))
+                    info.CallsQueuesChannelIds.Add(ch);
+            }
+        }
+
         private void ExtractFromSql(string sqlMessage, CallInfo info)
         {
             var (_, columns) = _sqlParser.ParseInsertStatement(sqlMessage);
@@ -387,6 +536,100 @@ namespace LogAnalyzer.Services
 
             if (columns.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
                 info.Duration = durMs;
+        }
+
+        // Isolated CallID-only path: pure representation of Calls table data
+        private (List<LogEntry> entries, CallInfo info) AnalyzeCallIdOnly(
+            List<LogEntry> allEntries, string callId)
+        {
+            var sourceFiles = new HashSet<string>();
+            var callInfo = new CallInfo { CallId = callId };
+
+            // Find and parse the INSERT INTO Calls entry
+            var sqlInsert = allEntries.FirstOrDefault(e =>
+                e.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase) &&
+                e.Message.Contains(callId, StringComparison.OrdinalIgnoreCase));
+
+            if (sqlInsert == null)
+                return (new List<LogEntry>(), callInfo);
+
+            // Parse full SQL (Message + SipRawBody for multi-line INSERTs)
+            var fullSql = string.IsNullOrEmpty(sqlInsert.SipRawBody)
+                ? sqlInsert.Message
+                : sqlInsert.Message + " " + sqlInsert.SipRawBody;
+            var (_, cols) = _sqlParser.ParseInsertStatement(fullSql);
+
+            if (cols.Count == 0)
+                return (new List<LogEntry>(), callInfo);
+
+            // Populate CallInfo from Calls table
+            if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
+            if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
+            if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
+            if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
+            if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
+            else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;
+            if (cols.TryGetValue("CallType", out var callType) &&
+                CallTypeNames.TryGetValue(callType, out var typeName))
+                callInfo.CallTypeName = $"{typeName} ({callType})";
+            if (cols.TryGetValue("Duration", out var dur) && long.TryParse(dur, out var durMs))
+                callInfo.Duration = durMs;
+
+            // Time bounds from Calls table — supports formats like '20250623 07:46:28' and ISO formats
+            var formats = new[]
+            {
+                "yyyyMMdd HH:mm:ss", "yyyyMMdd HH:mm:ss.fff",
+                "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.fff",
+                "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff"
+            };
+            DateTime startTime;
+            if (!DateTime.TryParseExact(callInfo.ServerStartDateTime, formats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out startTime) &&
+                !DateTime.TryParse(callInfo.ServerStartDateTime, out startTime))
+                return (new List<LogEntry>(), callInfo);
+
+            // Duration is in seconds (DurationSec)
+            var endTime = callInfo.Duration.HasValue && callInfo.Duration.Value > 0
+                ? startTime.AddSeconds(callInfo.Duration.Value)
+                : startTime;
+
+            callInfo.StartTime = startTime;
+            callInfo.EndTime = endTime;
+
+            // Set StatCallRef for AgentCalls/CallsQueues lookup
+            callInfo.StatCallRef = callId;
+            ExtractUserLoginFromAgentCalls(allEntries, callInfo);
+            ExtractCallsQueuesData(allEntries, callInfo);
+
+            // Extract partner channel from FoundPartner trace and add to channel list for Scripts
+            var partnerChannel = ExtractPartnerChannelFromFoundPartner(allEntries, callId);
+            if (!string.IsNullOrEmpty(partnerChannel) &&
+                !callInfo.CallsQueuesChannelIds.Contains(partnerChannel))
+                callInfo.CallsQueuesChannelIds.Add(partnerChannel);
+
+            // Build channel set: Calls channel + CallsQueues channels
+            var channelIds = new HashSet<string>();
+            if (!string.IsNullOrEmpty(callInfo.ChannelNumber))
+                channelIds.Add(callInfo.ChannelNumber);
+            foreach (var ch in callInfo.CallsQueuesChannelIds)
+                channelIds.Add(ch);
+
+            // Filter log entries: all traces within call duration [start - 5s, end + 5s]
+            var logStartTime = startTime.AddSeconds(-5);
+            var logEndTime = endTime.AddSeconds(5);
+
+            var matchedEntries = allEntries.Where(e =>
+                e.Timestamp >= logStartTime && e.Timestamp <= logEndTime
+            ).OrderBy(e => e.Timestamp).ToList();
+
+            foreach (var entry in matchedEntries)
+                sourceFiles.Add(entry.SourceFile);
+
+            callInfo.PartnerChannelIds = channelIds.ToList();
+            callInfo.InviteStartTime = logStartTime;
+            callInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
+            return (matchedEntries, callInfo);
         }
 
     }

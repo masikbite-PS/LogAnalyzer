@@ -111,6 +111,8 @@ namespace LogAnalyzer.ViewModels
 
         public void SetData(List<LogEntry> entries, string callId, string partnerPhysicalId = "")
         {
+            SqlRecords.Clear();
+            StatusMessage = "Analyzing...";
             _allEntries = entries;
             _searchCallId = callId;
             _partnerPhysicalId = partnerPhysicalId;

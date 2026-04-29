@@ -108,31 +108,22 @@ namespace LogAnalyzer.ViewModels
                 var sipParser = new SipLogParser();
                 var sipMessages = await sipParser.ParseAsync(LogFolderPath, progress);
 
-                // Analyze using CallId if provided
-                var callInfo = new CallInfo { CallId = CallId ?? SipCallId ?? "" };
-                var filteredEntries = new List<LogEntry>();
-
-                if (!string.IsNullOrWhiteSpace(CallId))
-                {
-                    StatusMessage = $"Analyzing call {CallId}...";
-                    var result = _analyzer.AnalyzeCall(allEntries, CallId, sipMessages);
-                    filteredEntries = result.Item1;
-                    callInfo = result.Item2;
-                }
-                else if (!string.IsNullOrWhiteSpace(SipCallId))
-                {
-                    StatusMessage = $"Analyzing SIP call {SipCallId}...";
-                    var result = _analyzer.AnalyzeCall(allEntries, SipCallId, sipMessages);
-                    filteredEntries = result.Item1;
-                    callInfo = result.Item2;
-                }
+                StatusMessage = $"Analyzing...";
+                var result = _analyzer.AnalyzeCall(
+                    allEntries,
+                    pbxCallId: string.IsNullOrWhiteSpace(CallId) ? null : CallId,
+                    sipCallId: string.IsNullOrWhiteSpace(SipCallId) ? null : SipCallId,
+                    sipMessages);
+                var filteredEntries = result.entries;
+                var callInfo = result.info;
 
                 CallInfo = callInfo;
                 var sqlCallId = !string.IsNullOrWhiteSpace(CallId)
                     ? CallId
                     : callInfo.StatCallRef ?? "";
                 SqlDataViewModel.SetData(allEntries, sqlCallId, callInfo.PartnerPhysicalId ?? "");
-                ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds);
+                ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.CallsQueuesChannelIds,
+                    callInfo.InviteStartTime, callInfo.EndTime?.AddSeconds(5));
                 foreach (var entry in filteredEntries)
                 {
                     LogEntries.Add(entry);
