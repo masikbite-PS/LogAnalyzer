@@ -31,9 +31,13 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish
 
+      - name: Rename binary with version
+        shell: pwsh
+        run: Rename-Item -Path publish/LogAnalyzer.exe -NewName "LogAnalyzer-${{ github.ref_name }}.exe"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: PBX Log Analyzer ${{ github.ref_name }}
-          files: publish/LogAnalyzer.exe
+          files: publish/LogAnalyzer-${{ github.ref_name }}.exe
           generate_release_notes: true
