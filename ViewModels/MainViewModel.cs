@@ -41,6 +41,14 @@ namespace LogAnalyzer.ViewModels
         [ObservableProperty]
         private CallInfo? callInfo;
 
+        [ObservableProperty]
+        private bool logFolderError;
+
+        partial void OnLogFolderPathChanged(string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) LogFolderError = false;
+        }
+
         public ObservableCollection<LogEntry> LogEntries { get; } = new();
 
         public ObservableCollection<LogLevelFilter> LogLevelFilters { get; } = new()
@@ -80,8 +88,10 @@ namespace LogAnalyzer.ViewModels
             if (string.IsNullOrWhiteSpace(LogFolderPath))
             {
                 StatusMessage = "Please select a log folder";
+                LogFolderError = true;
                 return;
             }
+            LogFolderError = false;
 
             IsAnalyzing = true;
             ProgressValue = 0;
@@ -121,7 +131,8 @@ namespace LogAnalyzer.ViewModels
                 var sqlCallId = !string.IsNullOrWhiteSpace(CallId)
                     ? CallId
                     : callInfo.StatCallRef ?? "";
-                SqlDataViewModel.SetData(allEntries, sqlCallId, callInfo.PartnerPhysicalId ?? "");
+                SqlDataViewModel.SetData(allEntries, sqlCallId,
+                    callInfo.PartnerPhysicalId ?? "", callInfo.OwnPhysicalId ?? "");
                 ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.CallsQueuesChannelIds,
                     callInfo.InviteStartTime, callInfo.EndTime?.AddSeconds(5));
                 foreach (var entry in filteredEntries)
