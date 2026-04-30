@@ -24,18 +24,226 @@ namespace LogAnalyzer.Services
             return AnalyzeBoth(allEntries, pbxCallId!, sipCallId!, sipMessages);
         }
 
-        // Isolated SIP-only path: no PBX CallID provided, search by SIP Call-ID
+        // Isolated SIP-only path: no PBX CallID provided, search by SIP Call-ID.
+        // Partner detection uses Calls.PartnerPhysicalId → PhysicalCalls (precise),
+        // not the legacy ±3 min number-matching heuristic which fails when calls wait
+        // long in queue before pickup.
         private (List<LogEntry> entries, CallInfo info) AnalyzeSipOnly(
             List<LogEntry> allEntries, string sipCallId, List<SipMessage>? sipMessages)
         {
-            return AnalyzeBySipLookup(allEntries, logFilterId: sipCallId, sipLookupId: sipCallId, sipMessages);
+            var sourceFiles = new HashSet<string>();
+            var logFilterId = sipCallId;
+            var sipLookupId = sipCallId;
+
+            var escapedCallId = Regex.Escape(logFilterId);
+            var pattern = $"(CallID|ID)\\s*=\\s*['\"]?{escapedCallId}['\"]?";
+            var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+            var initialMatches = allEntries.Where(e =>
+                regex.IsMatch(e.Message) || regex.IsMatch(e.SipRawBody)).ToList();
+
+            if (initialMatches.Count == 0)
+            {
+                initialMatches = allEntries.Where(e =>
+                    e.Message.Contains(logFilterId, StringComparison.OrdinalIgnoreCase) ||
+                    e.SipRawBody.Contains(logFilterId, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (initialMatches.Count == 0)
+                return (new List<LogEntry>(), new CallInfo { CallId = logFilterId });
+
+            var minTime = initialMatches.Min(e => e.Timestamp);
+            var maxTime = initialMatches.Max(e => e.Timestamp);
+
+            HashSet<string> channelIds = new();
+            var sipNumbers = ExtractSipNumbers(sipMessages, sipLookupId);
+            if (sipNumbers.Count > 0)
+                channelIds = FindChannelIds(allEntries, sipNumbers);
+
+            var primaryInvite = sipMessages?.FirstOrDefault(m =>
+                m.CallId.Equals(sipLookupId, StringComparison.OrdinalIgnoreCase) &&
+                m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase));
+            var inviteStart = primaryInvite != null
+                ? primaryInvite.Timestamp.AddSeconds(-5) : minTime;
+
+            // No channels resolvable from SIP numbers → fall back to old shared logic.
+            if (channelIds.Count == 0)
+                return AnalyzeBySipLookup(allEntries, logFilterId, sipLookupId, sipMessages);
+
+            // Filter by primary channels and by primary SIP Call-ID body.
+            // Partner channel is added below once we know it from PhysicalCalls.
+            var matchedEntries = allEntries.Where(e =>
+                e.Timestamp >= inviteStart &&
+                (MatchesChannel(e.Message, channelIds) ||
+                 (e.SipRawBody.Length > 0 &&
+                  e.SipRawBody.Contains(sipLookupId, StringComparison.OrdinalIgnoreCase)))
+            ).OrderBy(e => e.Timestamp).ToList();
+
+            var callInfo = new CallInfo { CallId = logFilterId };
+            callInfo.PartnerChannelIds = channelIds.ToList();
+            ExtractCallRefs(allEntries, ref matchedEntries, callInfo, minTime, maxTime);
+
+            var fullInfo = ExtractCallInfo(matchedEntries, logFilterId, sourceFiles, minTime, maxTime);
+            fullInfo.PartnerChannelIds = callInfo.PartnerChannelIds;
+            fullInfo.LogicalCallRef = callInfo.LogicalCallRef;
+            fullInfo.PhysicalCallRef = callInfo.PhysicalCallRef;
+            fullInfo.StatCallRef = callInfo.StatCallRef;
+            fullInfo.InviteStartTime = inviteStart;
+
+            if (!string.IsNullOrEmpty(fullInfo.StatCallRef))
+            {
+                ExtractUserLoginFromAgentCalls(allEntries, fullInfo);
+                ExtractCallsQueuesData(allEntries, fullInfo);
+            }
+
+            // Partner detection via Calls.PartnerPhysicalId → PhysicalCalls.
+            var partnerSipCallIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(fullInfo.PartnerPhysicalId))
+            {
+                var partnerCols = FindPhysicalCallRecord(allEntries, fullInfo.PartnerPhysicalId);
+                if (partnerCols != null)
+                {
+                    if (partnerCols.TryGetValue("ChannelNumber", out var partnerCh) &&
+                        !string.IsNullOrWhiteSpace(partnerCh) && partnerCh != "null")
+                    {
+                        if (!fullInfo.CallsQueuesChannelIds.Contains(partnerCh))
+                            fullInfo.CallsQueuesChannelIds.Add(partnerCh);
+                        if (channelIds.Add(partnerCh))
+                        {
+                            var extraPartnerEntries = allEntries.Where(e =>
+                                e.Timestamp >= inviteStart &&
+                                MatchesChannel(e.Message, new HashSet<string> { partnerCh }));
+                            matchedEntries = matchedEntries.Union(extraPartnerEntries)
+                                .OrderBy(e => e.Timestamp).ToList();
+                            fullInfo.PartnerChannelIds = channelIds.ToList();
+                            // Extend EndTime so Scripts captures partner-channel traces
+                            if (matchedEntries.Count > 0)
+                                fullInfo.EndTime = matchedEntries.Max(e => e.Timestamp);
+                        }
+                    }
+
+                    var delta = GetUtcToSystemDelta(allEntries, fullInfo.StatCallRef);
+                    if (delta.HasValue && sipMessages != null &&
+                        partnerCols.TryGetValue("StartTime", out var partnerUtcStr) &&
+                        TryParsePbxDateTime(partnerUtcStr, out var partnerUtc))
+                    {
+                        var partnerSysStart = partnerUtc + delta.Value;
+                        var foundSipId = FindPartnerSipCallIdByPhysicalCallStart(
+                            sipMessages, partnerSysStart, sipLookupId);
+                        if (!string.IsNullOrEmpty(foundSipId))
+                            partnerSipCallIds.Add(foundSipId);
+                    }
+                }
+            }
+            fullInfo.PartnerSipCallIds = partnerSipCallIds.ToList();
+
+            foreach (var entry in matchedEntries) sourceFiles.Add(entry.SourceFile);
+            fullInfo.SourceFiles = sourceFiles.OrderBy(f => f).ToList();
+            return (matchedEntries, fullInfo);
         }
 
-        // Isolated Both path: PBX CallID + SIP Call-ID provided
+        private Dictionary<string, string>? FindPhysicalCallRecord(
+            List<LogEntry> allEntries, string physicalId)
+        {
+            foreach (var entry in allEntries)
+            {
+                if (!entry.Message.Contains("insert into PhysicalCalls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var fullSql = string.IsNullOrEmpty(entry.SipRawBody)
+                    ? entry.Message : entry.Message + " " + entry.SipRawBody;
+                var (table, cols) = _sqlParser.ParseInsertStatement(fullSql);
+                if (!table.Equals("PhysicalCalls", StringComparison.OrdinalIgnoreCase)) continue;
+                if (cols.TryGetValue("Id", out var id) &&
+                    id.Equals(physicalId, StringComparison.OrdinalIgnoreCase))
+                    return cols;
+            }
+            return null;
+        }
+
+        private TimeSpan? GetUtcToSystemDelta(List<LogEntry> allEntries, string? callsId)
+        {
+            if (string.IsNullOrWhiteSpace(callsId)) return null;
+            foreach (var entry in allEntries)
+            {
+                if (!entry.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var fullSql = string.IsNullOrEmpty(entry.SipRawBody)
+                    ? entry.Message : entry.Message + " " + entry.SipRawBody;
+                var (table, cols) = _sqlParser.ParseInsertStatement(fullSql);
+                if (!table.Equals("Calls", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!cols.TryGetValue("Id", out var id) ||
+                    !id.Equals(callsId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (cols.TryGetValue("StartTime", out var utcStr) &&
+                    cols.TryGetValue("ServerStartDateTime", out var sysStr) &&
+                    TryParsePbxDateTime(utcStr, out var utc) &&
+                    TryParsePbxDateTime(sysStr, out var sys))
+                    return sys - utc;
+                return null;
+            }
+            return null;
+        }
+
+        private static readonly string[] PbxDateFormats = new[]
+        {
+            "yyyyMMdd HH:mm:ss", "yyyyMMdd HH:mm:ss.fff",
+            "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.fff",
+            "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff"
+        };
+
+        private static bool TryParsePbxDateTime(string s, out DateTime result)
+        {
+            if (DateTime.TryParseExact(s, PbxDateFormats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out result)) return true;
+            return DateTime.TryParse(s, out result);
+        }
+
+        private static string? FindPartnerSipCallIdByPhysicalCallStart(
+            List<SipMessage> sipMessages, DateTime partnerStartSystem, string primarySipCallId)
+        {
+            var window = TimeSpan.FromSeconds(2);
+            var lo = partnerStartSystem - window;
+            var hi = partnerStartSystem + window;
+            return sipMessages
+                .Where(m => !m.CallId.Equals(primarySipCallId, StringComparison.OrdinalIgnoreCase))
+                .Where(m => m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase))
+                .Where(m => m.Timestamp >= lo && m.Timestamp <= hi)
+                .OrderBy(m => Math.Abs((m.Timestamp - partnerStartSystem).Ticks))
+                .Select(m => m.CallId)
+                .FirstOrDefault();
+        }
+
+        // Isolated Both path: PBX CallID + SIP Call-ID provided.
+        // All non-SIP tabs (Log Analysis, SQL Data, Scripts) use the stable CallID-only path
+        // driven by pbxCallId. SIP Messages uses the user-entered sipCallId (passed via
+        // MainViewModel) plus the partner SIP Call-ID derived from Calls.PartnerPhysicalId
+        // → PhysicalCalls.StartTime + UTC↔system delta (same precise lookup as SIP-only).
         private (List<LogEntry> entries, CallInfo info) AnalyzeBoth(
             List<LogEntry> allEntries, string pbxCallId, string sipCallId, List<SipMessage>? sipMessages)
         {
-            return AnalyzeBySipLookup(allEntries, logFilterId: pbxCallId, sipLookupId: sipCallId, sipMessages);
+            var (entries, info) = AnalyzeCallIdOnly(allEntries, pbxCallId);
+
+            if (sipMessages != null && !string.IsNullOrEmpty(info.PartnerPhysicalId))
+            {
+                var partnerCols = FindPhysicalCallRecord(allEntries, info.PartnerPhysicalId);
+                if (partnerCols != null)
+                {
+                    var delta = GetUtcToSystemDelta(allEntries, info.CallId);
+                    if (delta.HasValue &&
+                        partnerCols.TryGetValue("StartTime", out var partnerUtcStr) &&
+                        TryParsePbxDateTime(partnerUtcStr, out var partnerUtc))
+                    {
+                        var partnerSysStart = partnerUtc + delta.Value;
+                        var foundSipId = FindPartnerSipCallIdByPhysicalCallStart(
+                            sipMessages, partnerSysStart, sipCallId);
+                        if (!string.IsNullOrEmpty(foundSipId) &&
+                            !info.PartnerSipCallIds.Contains(foundSipId))
+                            info.PartnerSipCallIds.Add(foundSipId);
+                    }
+                }
+            }
+
+            return (entries, info);
         }
 
         // Shared SIP-aware analysis — used by AnalyzeSipOnly and AnalyzeBoth.
@@ -519,6 +727,9 @@ namespace LogAnalyzer.Services
             if (columns.TryGetValue("ChannelNumber", out var channel))
                 info.ChannelNumber = channel;
 
+            if (columns.TryGetValue("OwnPhysicalId", out var own))
+                info.OwnPhysicalId = own;
+
             if (columns.TryGetValue("PartnerPhysicalId", out var partner))
                 info.PartnerPhysicalId = partner;
 
@@ -566,6 +777,7 @@ namespace LogAnalyzer.Services
             if (cols.TryGetValue("CallingNumber", out var calling)) callInfo.CallingNumber = calling;
             if (cols.TryGetValue("CalledNumber", out var called)) callInfo.CalledNumber = called;
             if (cols.TryGetValue("ChannelNumber", out var channel)) callInfo.ChannelNumber = channel;
+            if (cols.TryGetValue("OwnPhysicalId", out var own)) callInfo.OwnPhysicalId = own;
             if (cols.TryGetValue("PartnerPhysicalId", out var partner)) callInfo.PartnerPhysicalId = partner;
             if (cols.TryGetValue("ServerStartDateTime", out var sdt)) callInfo.ServerStartDateTime = sdt;
             else if (cols.TryGetValue("StartTime", out var st)) callInfo.ServerStartDateTime = st;

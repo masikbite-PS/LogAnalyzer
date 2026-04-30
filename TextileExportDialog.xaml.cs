@@ -12,6 +12,9 @@ namespace LogAnalyzer
             InitializeComponent();
             TextileContent = textileContent;
             DataContext = this;
+            Owner = Application.Current?.MainWindow != this
+                ? Application.Current?.MainWindow
+                : null;
         }
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
