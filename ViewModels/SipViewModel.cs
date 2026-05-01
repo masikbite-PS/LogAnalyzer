@@ -34,22 +34,26 @@ public partial class SipViewModel : ObservableObject
     private readonly SipKnowledgeBase _kb = new();
     private readonly SipCallFlowDiagramBuilder _diagramBuilder = new();
 
-    public void SetData(List<SipMessage> messages, string callId, string? partnerCallId)
+    public void SetData(List<SipMessage> messages, string callId, IEnumerable<string>? partnerSipCallIds = null)
     {
         SipFlowGroups.Clear();
         SelectedMessage = null;
 
-        if (string.IsNullOrWhiteSpace(callId) && string.IsNullOrWhiteSpace(partnerCallId))
+        var partnerIds = (partnerSipCallIds ?? Enumerable.Empty<string>())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(callId) && partnerIds.Count == 0)
         {
             StatusMessage = "No search criteria provided";
             return;
         }
 
-        // Filter messages by Call-ID (SIP Call-ID header)
+        // Filter messages by primary Call-ID and any resolved partner SIP Call-IDs
         var filtered = messages
             .Where(m =>
                 (!string.IsNullOrWhiteSpace(callId) && m.CallId.Contains(callId, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(partnerCallId) && m.CallId.Contains(partnerCallId, StringComparison.OrdinalIgnoreCase))
+                partnerIds.Any(p => m.CallId.Contains(p, StringComparison.OrdinalIgnoreCase))
             )
             .OrderBy(m => m.Timestamp)
             .ToList();

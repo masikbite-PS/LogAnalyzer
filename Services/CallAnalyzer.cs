@@ -94,7 +94,112 @@ namespace LogAnalyzer.Services
             var callInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
             callInfo.PartnerChannelIds = partnerChannelIds.ToList();
 
+            // Enrich partner channel via Calls.PartnerPhysicalId → PhysicalCalls.
+            // Reliable when Switch trace heuristics miss (e.g. long queue wait).
+            if (!string.IsNullOrEmpty(callInfo.PartnerPhysicalId))
+            {
+                var partnerCols = FindPhysicalCallRecord(allEntries, callInfo.PartnerPhysicalId);
+                if (partnerCols != null &&
+                    partnerCols.TryGetValue("ChannelNumber", out var partnerCh) &&
+                    !string.IsNullOrWhiteSpace(partnerCh) && partnerCh != "null" &&
+                    !callInfo.PartnerChannelIds.Contains(partnerCh))
+                {
+                    callInfo.PartnerChannelIds.Add(partnerCh);
+                }
+            }
+
             return (matchedEntries, callInfo);
+        }
+
+        // Resolves the partner SIP Call-ID using PhysicalCalls.StartTime (UTC) plus the
+        // Calls UTC↔system delta, then matching the nearest INVITE in time. Replaces
+        // the legacy ±N min number heuristic which fails when calls wait long in queue.
+        public void EnrichSipPartner(CallInfo info, List<LogEntry> allEntries,
+            List<SipMessage>? sipMessages, string primarySipCallId)
+        {
+            if (sipMessages == null || string.IsNullOrEmpty(info.PartnerPhysicalId)) return;
+            var partnerCols = FindPhysicalCallRecord(allEntries, info.PartnerPhysicalId);
+            if (partnerCols == null) return;
+
+            var delta = GetUtcToSystemDelta(allEntries, info.CallId);
+            if (!delta.HasValue) return;
+
+            if (!partnerCols.TryGetValue("StartTime", out var partnerUtcStr) ||
+                !TryParsePbxDateTime(partnerUtcStr, out var partnerUtc)) return;
+
+            var partnerSysStart = partnerUtc + delta.Value;
+            var foundSipId = FindPartnerSipCallIdByPhysicalCallStart(
+                sipMessages, partnerSysStart, primarySipCallId);
+            if (!string.IsNullOrEmpty(foundSipId) &&
+                !info.PartnerSipCallIds.Contains(foundSipId))
+                info.PartnerSipCallIds.Add(foundSipId);
+        }
+
+        private Dictionary<string, string>? FindPhysicalCallRecord(
+            List<LogEntry> allEntries, string physicalId)
+        {
+            foreach (var entry in allEntries)
+            {
+                if (!entry.Message.Contains("insert into PhysicalCalls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var (table, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                if (!table.Equals("PhysicalCalls", StringComparison.OrdinalIgnoreCase)) continue;
+                if (cols.TryGetValue("Id", out var id) &&
+                    id.Equals(physicalId, StringComparison.OrdinalIgnoreCase))
+                    return cols;
+            }
+            return null;
+        }
+
+        private TimeSpan? GetUtcToSystemDelta(List<LogEntry> allEntries, string? callsId)
+        {
+            if (string.IsNullOrWhiteSpace(callsId)) return null;
+            foreach (var entry in allEntries)
+            {
+                if (!entry.Message.Contains("insert into Calls", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var (table, cols) = _sqlParser.ParseInsertStatement(entry.Message);
+                if (!table.Equals("Calls", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!cols.TryGetValue("Id", out var id) ||
+                    !id.Equals(callsId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (cols.TryGetValue("StartTime", out var utcStr) &&
+                    cols.TryGetValue("ServerStartDateTime", out var sysStr) &&
+                    TryParsePbxDateTime(utcStr, out var utc) &&
+                    TryParsePbxDateTime(sysStr, out var sys))
+                    return sys - utc;
+                return null;
+            }
+            return null;
+        }
+
+        private static readonly string[] PbxDateFormats = new[]
+        {
+            "yyyyMMdd HH:mm:ss", "yyyyMMdd HH:mm:ss.fff",
+            "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.fff",
+            "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff"
+        };
+
+        private static bool TryParsePbxDateTime(string s, out DateTime result)
+        {
+            if (DateTime.TryParseExact(s, PbxDateFormats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out result)) return true;
+            return DateTime.TryParse(s, out result);
+        }
+
+        private static string? FindPartnerSipCallIdByPhysicalCallStart(
+            List<SipMessage> sipMessages, DateTime partnerStartSystem, string primarySipCallId)
+        {
+            var window = TimeSpan.FromSeconds(2);
+            var lo = partnerStartSystem - window;
+            var hi = partnerStartSystem + window;
+            return sipMessages
+                .Where(m => !m.CallId.Equals(primarySipCallId, StringComparison.OrdinalIgnoreCase))
+                .Where(m => m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase))
+                .Where(m => m.Timestamp >= lo && m.Timestamp <= hi)
+                .OrderBy(m => Math.Abs((m.Timestamp - partnerStartSystem).Ticks))
+                .Select(m => m.CallId)
+                .FirstOrDefault();
         }
 
         private HashSet<string> ExtractPartnerChannelIds(List<LogEntry> entries)
@@ -192,6 +297,9 @@ namespace LogAnalyzer.Services
 
             if (columns.TryGetValue("ChannelNumber", out var channel))
                 info.ChannelNumber = channel;
+
+            if (columns.TryGetValue("OwnPhysicalId", out var own))
+                info.OwnPhysicalId = own;
 
             if (columns.TryGetValue("PartnerPhysicalId", out var partner))
                 info.PartnerPhysicalId = partner;

@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LogAnalyzer.Models;
 
 namespace LogAnalyzer.ViewModels;
@@ -41,5 +44,22 @@ public partial class ScriptsViewModel : ObservableObject
 
         var channelInfo = string.Join(", ", channelIds);
         StatusMessage = $"Found {filtered.Count} Scripts:: trace(s) for channels: {channelInfo}";
+    }
+
+    [RelayCommand]
+    public void ExportScripts()
+    {
+        if (ScriptsEntries.Count == 0)
+        {
+            MessageBox.Show("No data to export", "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var sb = new StringBuilder();
+        foreach (var entry in ScriptsEntries)
+            sb.AppendLine(entry.ToString());
+
+        var dialog = new TextileExportDialog(sb.ToString());
+        dialog.ShowDialog();
     }
 }
