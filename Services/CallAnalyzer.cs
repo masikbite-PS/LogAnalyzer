@@ -37,9 +37,9 @@ namespace LogAnalyzer.Services
             var minTime = initialMatches.Min(e => e.Timestamp);
             var maxTime = initialMatches.Max(e => e.Timestamp);
 
-            // Expand time window: 5 minutes before first match, 5 minutes after last match
-            var timeWindowBefore = TimeSpan.FromMinutes(5);
-            var timeWindowAfter = TimeSpan.FromMinutes(5);
+            // Tight time window: 5 seconds before first match, 5 seconds after last match
+            var timeWindowBefore = TimeSpan.FromSeconds(5);
+            var timeWindowAfter = TimeSpan.FromSeconds(5);
 
             var searchStart = minTime.Add(-timeWindowBefore);
             var searchEnd = maxTime.Add(timeWindowAfter);
@@ -93,6 +93,7 @@ namespace LogAnalyzer.Services
             // Extract call info
             var callInfo = ExtractCallInfo(matchedEntries, callId, sourceFiles, minTime, maxTime);
             callInfo.PartnerChannelIds = partnerChannelIds.ToList();
+            callInfo.InviteStartTime = searchStart;
 
             // Enrich partner channel via Calls.PartnerPhysicalId → PhysicalCalls.
             // Reliable when Switch trace heuristics miss (e.g. long queue wait).

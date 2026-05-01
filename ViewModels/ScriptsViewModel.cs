@@ -18,7 +18,8 @@ public partial class ScriptsViewModel : ObservableObject
     [ObservableProperty]
     private string statusMessage = "Run analysis first";
 
-    public void SetData(List<LogEntry> allEntries, string? channelNumber, List<string> partnerChannelIds)
+    public void SetData(List<LogEntry> allEntries, string? channelNumber, List<string> partnerChannelIds,
+        DateTime? startTime = null, DateTime? endTime = null)
     {
         ScriptsEntries.Clear();
 
@@ -36,6 +37,8 @@ public partial class ScriptsViewModel : ObservableObject
         var filtered = allEntries
             .Where(e => e.Component.Contains("Scripts::", StringComparison.OrdinalIgnoreCase))
             .Where(e => channelIds.Any(id => e.Message.Contains(id, StringComparison.OrdinalIgnoreCase)))
+            .Where(e => startTime == null || e.Timestamp >= startTime.Value)
+            .Where(e => endTime == null || e.Timestamp <= endTime.Value)
             .OrderBy(e => e.Timestamp)
             .ToList();
 
