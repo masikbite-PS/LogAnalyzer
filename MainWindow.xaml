@@ -139,7 +139,7 @@
                                                     <Setter Property="TextBox.Foreground" Value="#808080"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Warning">
-                                                    <Setter Property="TextBox.Foreground" Value="#FF8C00"/>
+                                                    <Setter Property="TextBox.Foreground" Value="#8B7500"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Error">
                                                     <Setter Property="TextBox.Foreground" Value="#FF0000"/>
@@ -386,7 +386,7 @@
                                                     <Setter Property="TextBox.Foreground" Value="#808080"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Warning">
-                                                    <Setter Property="TextBox.Foreground" Value="#FF8C00"/>
+                                                    <Setter Property="TextBox.Foreground" Value="#8B7500"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Level}" Value="Error">
                                                     <Setter Property="TextBox.Foreground" Value="#FF0000"/>

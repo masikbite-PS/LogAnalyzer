@@ -145,16 +145,7 @@ namespace LogAnalyzer.ViewModels
                 // Analyze the call
                 var (filteredEntries, callInfo) = _analyzer.AnalyzeCall(allEntries, CallId);
 
-                CallInfo = callInfo;
-                SqlDataViewModel.SetData(allEntries, CallId,
-                    callInfo.PartnerPhysicalId ?? "", callInfo.OwnPhysicalId ?? "");
-                ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds);
-                foreach (var entry in filteredEntries)
-                {
-                    LogEntries.Add(entry);
-                }
-
-                // Parse SIP messages
+                // Parse SIP messages first so we can interleave them into Log Analysis
                 List<SipMessage> sipMessages;
                 if (!string.IsNullOrWhiteSpace(SipFolderPath))
                 {
@@ -168,6 +159,40 @@ namespace LogAnalyzer.ViewModels
                 }
 
                 _analyzer.EnrichSipPartner(callInfo, allEntries, sipMessages, CallId);
+
+                CallInfo = callInfo;
+                SqlDataViewModel.SetData(allEntries, CallId,
+                    callInfo.PartnerPhysicalId ?? "", callInfo.OwnPhysicalId ?? "");
+                ScriptsViewModel.SetData(allEntries, callInfo.ChannelNumber, callInfo.PartnerChannelIds,
+                    callInfo.InviteStartTime, callInfo.EndTime?.AddSeconds(5));
+
+                // Build virtual log entries from SIP messages relevant to this call,
+                // then merge with PBX traces by timestamp so the Log Analysis tab
+                // shows raw SIP messages inline with the rest.
+                var partnerSipIds = callInfo.PartnerSipCallIds ?? new List<string>();
+                var sipEntries = sipMessages
+                    .Where(m =>
+                        (!string.IsNullOrWhiteSpace(CallId) &&
+                         m.CallId.Contains(CallId, StringComparison.OrdinalIgnoreCase)) ||
+                        partnerSipIds.Any(p =>
+                            !string.IsNullOrWhiteSpace(p) &&
+                            m.CallId.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                    .Select(m => new LogEntry
+                    {
+                        Timestamp = m.Timestamp,
+                        ThreadId = m.ThreadId,
+                        Level = string.IsNullOrEmpty(m.Level) ? "Info" : m.Level,
+                        Component = string.IsNullOrEmpty(m.SipMethod)
+                            ? $"SIP {m.Direction}".Trim()
+                            : $"SIP {m.Direction} {m.SipMethod}".Trim(),
+                        Message = m.RawBody,
+                        SourceFile = m.SourceFile,
+                        SipRawBody = m.RawBody,
+                    });
+
+                foreach (var entry in filteredEntries.Concat(sipEntries).OrderBy(e => e.Timestamp))
+                    LogEntries.Add(entry);
+
                 SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";

@@ -23,5 +23,7 @@ namespace LogAnalyzer.Models
         public List<string> SourceFiles { get; set; } = new();
         public List<string> PartnerChannelIds { get; set; } = new();
         public List<string> PartnerSipCallIds { get; set; } = new();
+
+        public DateTime? InviteStartTime { get; set; }
     }
 }
