@@ -9,6 +9,7 @@ namespace LogAnalyzer.Models
         public string? CallingNumber { get; set; }
         public string? CalledNumber { get; set; }
         public string? ChannelNumber { get; set; }
+        public string? OwnPhysicalId { get; set; }
         public string? PartnerPhysicalId { get; set; }
         public long? Duration { get; set; }
         public DateTime? StartTime { get; set; }
@@ -21,5 +22,6 @@ namespace LogAnalyzer.Models
 
         public List<string> SourceFiles { get; set; } = new();
         public List<string> PartnerChannelIds { get; set; } = new();
+        public List<string> PartnerSipCallIds { get; set; } = new();
     }
 }

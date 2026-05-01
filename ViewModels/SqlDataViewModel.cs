@@ -32,6 +32,7 @@ namespace LogAnalyzer.ViewModels
         private readonly TableDefinitionService _tableService = new();
         private List<LogEntry> _allEntries = new();
         private string _searchCallId = string.Empty;
+        private string _ownPhysicalId = string.Empty;
         private string _partnerPhysicalId = string.Empty;
 
         [ObservableProperty]
@@ -109,11 +110,13 @@ namespace LogAnalyzer.ViewModels
             RefreshTableList();
         }
 
-        public void SetData(List<LogEntry> entries, string callId, string partnerPhysicalId = "")
+        public void SetData(List<LogEntry> entries, string callId, string partnerPhysicalId = "",
+            string ownPhysicalId = "")
         {
             _allEntries = entries;
             _searchCallId = callId;
             _partnerPhysicalId = partnerPhysicalId;
+            _ownPhysicalId = ownPhysicalId;
             RefreshTableData();
         }
 
@@ -261,15 +264,17 @@ namespace LogAnalyzer.ViewModels
                     matchesSearchCallId = true;
                 }
 
-                bool matchesPartnerId = false;
-                if (!string.IsNullOrEmpty(_partnerPhysicalId) &&
-                    columns.TryGetValue("Id", out var id) &&
-                    id.Equals(_partnerPhysicalId, StringComparison.OrdinalIgnoreCase))
-                {
-                    matchesPartnerId = true;
-                }
+                columns.TryGetValue("Id", out var id);
 
-                if (!matchesSearchCallId && !matchesPartnerId)
+                bool matchesPartnerId = !string.IsNullOrEmpty(_partnerPhysicalId) &&
+                    id != null &&
+                    id.Equals(_partnerPhysicalId, StringComparison.OrdinalIgnoreCase);
+
+                bool matchesOwnId = !string.IsNullOrEmpty(_ownPhysicalId) &&
+                    id != null &&
+                    id.Equals(_ownPhysicalId, StringComparison.OrdinalIgnoreCase);
+
+                if (!matchesSearchCallId && !matchesPartnerId && !matchesOwnId)
                     continue;
 
                 var label = columns.TryGetValue("Id", out var physicalId) ? physicalId : count.ToString();
