@@ -44,6 +44,9 @@ namespace LogAnalyzer.ViewModels
         [ObservableProperty]
         private bool logFolderError;
 
+        [ObservableProperty]
+        private int selectedTabIndex = 0;
+
         partial void OnLogFolderPathChanged(string value)
         {
             if (!string.IsNullOrWhiteSpace(value)) LogFolderError = false;
@@ -65,6 +68,8 @@ namespace LogAnalyzer.ViewModels
         public SipViewModel SipViewModel { get; } = new();
 
         public ScriptsViewModel ScriptsViewModel { get; } = new();
+
+        public CallSearchViewModel CallSearchViewModel { get; } = new();
 
         [RelayCommand]
         private void SelectLogFolder()
@@ -144,6 +149,7 @@ namespace LogAnalyzer.ViewModels
                     callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
+                SelectedTabIndex = 1;
             }
             catch (OperationCanceledException)
             {
@@ -158,6 +164,23 @@ namespace LogAnalyzer.ViewModels
                 IsAnalyzing = false;
                 _cancellationTokenSource?.Dispose();
             }
+        }
+
+        [RelayCommand]
+        private async Task ScanForCalls()
+        {
+            await CallSearchViewModel.ScanAsync(LogFolderPath);
+        }
+
+        [RelayCommand]
+        private async Task UseCallForAnalysis(CallSummary? call)
+        {
+            if (call == null || string.IsNullOrWhiteSpace(call.CallId))
+                return;
+
+            SipCallId = call.CallId;
+            CallId = "";
+            await Analyze();
         }
 
         [RelayCommand]

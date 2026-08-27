@@ -206,6 +206,25 @@ public class SipLogParser
         }
     }
 
+    public List<CallSummary> BuildCallSummaries(List<SipMessage> messages)
+    {
+        return messages
+            .Where(m => m.SipMethod.Equals("INVITE", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(m => m.CallId)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .Select(g => g.OrderBy(m => m.Timestamp).First())
+            .OrderBy(m => m.Timestamp)
+            .Select(m => new CallSummary
+            {
+                CallId = m.CallId,
+                CallingNumber = m.FromNumber,
+                CalledNumber = m.ToNumber,
+                StartTime = m.Timestamp,
+                SourceFile = m.SourceFile
+            })
+            .ToList();
+    }
+
     private string ExtractSipMethod(List<string> bodyLines)
     {
         if (bodyLines.Count == 0)
