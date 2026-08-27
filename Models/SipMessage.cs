@@ -12,4 +12,6 @@ public class SipMessage
     public string SipMethod { get; set; } = "";
     public string SourceFile { get; set; } = "";
     public int SequenceNumber { get; set; }
+    public string FromNumber { get; set; } = "";
+    public string ToNumber { get; set; } = "";
 }

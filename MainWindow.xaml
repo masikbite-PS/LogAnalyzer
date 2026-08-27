@@ -76,7 +76,72 @@
             </Grid>
         </StackPanel>
 
-        <TabControl DockPanel.Dock="Top" Margin="10">
+        <TabControl DockPanel.Dock="Top" Margin="10" SelectedIndex="{Binding SelectedTabIndex}">
+            <!-- Tab 0: Search Calls -->
+            <TabItem Header="Search Calls" Padding="10,5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Scans the SIP folder (or PBX folder if SIP is not set) for SIP INVITE messages and lists one row per unique call flow (Call-ID). Double-click a row to analyze that call."
+                                   TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#555"/>
+                        <Button Grid.Column="1" Content="Scan for Calls" Command="{Binding ScanForCallsCommand}"
+                                Padding="15,5" Width="130" Margin="10,0,0,0"/>
+                    </Grid>
+
+                    <DataGrid Grid.Row="1" Margin="10,0,10,10"
+                              ItemsSource="{Binding CallSearchViewModel.Calls}"
+                              SelectedItem="{Binding CallSearchViewModel.SelectedCall}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              SelectionUnit="FullRow" SelectionMode="Single"
+                              ClipboardCopyMode="IncludeHeader"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                              BorderThickness="1" BorderBrush="#CCCCCC"
+                              RowBackground="White" AlternatingRowBackground="#F8F8F8"
+                              MouseDoubleClick="CallSearchGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Start Time" Binding="{Binding StartTime, StringFormat=yyyy-MM-dd HH:mm:ss.fff}" Width="170"/>
+                            <DataGridTextColumn Header="Calling Nr" Binding="{Binding CallingNumber}" Width="130"/>
+                            <DataGridTextColumn Header="Called Nr" Binding="{Binding CalledNumber}" Width="130"/>
+                            <DataGridTextColumn Header="Call-ID" Binding="{Binding CallId}" Width="*"/>
+                            <DataGridTemplateColumn Header="" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Copy" Padding="8,2" FontSize="10"
+                                                Command="{Binding DataContext.CallSearchViewModel.CopyCallIdCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Copy Call-ID"
+                                          Command="{Binding PlacementTarget.DataContext.CallSearchViewModel.CopyCallIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                    </DataGrid>
+
+                    <Grid Grid.Row="2" Margin="10,0,10,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding CallSearchViewModel.StatusMessage}" VerticalAlignment="Center" Foreground="#555"/>
+                        <ProgressBar Grid.Column="1" Width="150" Height="16" Value="{Binding CallSearchViewModel.ProgressValue}" Maximum="100"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
             <!-- Tab 1: Log Analysis -->
             <TabItem Header="Log Analysis" Padding="10,5">
                 <Grid>

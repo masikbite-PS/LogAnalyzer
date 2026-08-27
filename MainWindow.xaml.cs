@@ -72,5 +72,14 @@ namespace LogAnalyzer
             var lines = SelectedSqlRows(dg).Select(c => c.DisplayValue);
             CopyToClipboard(string.Join(System.Environment.NewLine, lines));
         }
+
+        private async void CallSearchGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is DataGrid dg && dg.SelectedItem is CallSummary call)
+            {
+                var viewModel = (MainViewModel)DataContext;
+                await viewModel.UseCallForAnalysisCommand.ExecuteAsync(call);
+            }
+        }
     }
 }

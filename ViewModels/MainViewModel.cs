@@ -47,6 +47,9 @@ namespace LogAnalyzer.ViewModels
         [ObservableProperty]
         private bool sipFolderError;
 
+        [ObservableProperty]
+        private int selectedTabIndex = 0;
+
         partial void OnPbxFolderPathChanged(string value)
         {
             if (!string.IsNullOrWhiteSpace(value)) PbxFolderError = false;
@@ -73,6 +76,8 @@ namespace LogAnalyzer.ViewModels
         public SipViewModel SipViewModel { get; } = new();
 
         public ScriptsViewModel ScriptsViewModel { get; } = new();
+
+        public CallSearchViewModel CallSearchViewModel { get; } = new();
 
         [RelayCommand]
         private void SelectPbxFolder()
@@ -196,6 +201,7 @@ namespace LogAnalyzer.ViewModels
                 SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
+                SelectedTabIndex = 1;
             }
             catch (OperationCanceledException)
             {
@@ -210,6 +216,23 @@ namespace LogAnalyzer.ViewModels
                 IsAnalyzing = false;
                 _cancellationTokenSource?.Dispose();
             }
+        }
+
+        [RelayCommand]
+        private async Task ScanForCalls()
+        {
+            var folder = !string.IsNullOrWhiteSpace(SipFolderPath) ? SipFolderPath : PbxFolderPath;
+            await CallSearchViewModel.ScanAsync(folder);
+        }
+
+        [RelayCommand]
+        private async Task UseCallForAnalysis(CallSummary? call)
+        {
+            if (call == null || string.IsNullOrWhiteSpace(call.CallId))
+                return;
+
+            CallId = call.CallId;
+            await Analyze();
         }
 
         [RelayCommand]
