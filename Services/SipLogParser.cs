@@ -40,6 +40,16 @@ public class SipLogParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
     );
 
+    private static readonly Regex ExpiresHeaderRegex = new(
+        @"^Expires:\s*(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
+    private static readonly Regex ExpiresParamRegex = new(
+        @"[;,]\s*expires=(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+
     public async Task<List<SipMessage>> ParseAsync(string folderPath, IProgress<int>? progress = null)
     {
         var messages = new List<SipMessage>();
@@ -185,6 +195,10 @@ public class SipLogParser
             var fromMatch = FromRegex.Match(rawBody);
             var toMatch = ToRegex.Match(rawBody);
 
+            var expiresMatch = ExpiresHeaderRegex.Match(rawBody);
+            if (!expiresMatch.Success)
+                expiresMatch = ExpiresParamRegex.Match(rawBody);
+
             return new SipMessage
             {
                 Timestamp = timestamp,
@@ -197,7 +211,8 @@ public class SipLogParser
                 SipMethod = sipMethod,
                 SourceFile = sourceFile,
                 FromNumber = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "",
-                ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : ""
+                ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : "",
+                Expires = expiresMatch.Success ? expiresMatch.Groups[1].Value.Trim() : ""
             };
         }
         catch
