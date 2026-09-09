@@ -40,6 +40,16 @@ public class SipLogParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
     );
 
+    private static readonly Regex ExpiresHeaderRegex = new(
+        @"^Expires:\s*(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
+    private static readonly Regex ExpiresParamRegex = new(
+        @"[;,]\s*expires=(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+
     public async Task<List<SipMessage>> ParseAsync(string folderPath, IProgress<int>? progress = null)
     {
         var messages = new List<SipMessage>();
@@ -185,6 +195,10 @@ public class SipLogParser
             var fromMatch = FromRegex.Match(rawBody);
             var toMatch = ToRegex.Match(rawBody);
 
+            var expiresMatch = ExpiresHeaderRegex.Match(rawBody);
+            if (!expiresMatch.Success)
+                expiresMatch = ExpiresParamRegex.Match(rawBody);
+
             return new SipMessage
             {
                 Timestamp = timestamp,
@@ -197,7 +211,8 @@ public class SipLogParser
                 SipMethod = sipMethod,
                 SourceFile = sourceFile,
                 FromNumber = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "",
-                ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : ""
+                ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : "",
+                Expires = expiresMatch.Success ? expiresMatch.Groups[1].Value.Trim() : ""
             };
         }
         catch
@@ -224,6 +239,39 @@ public class SipLogParser
             })
             .ToList();
     }
+
+    public List<RegistrationSummary> BuildRegistrationSummaries(List<SipMessage> messages)
+    {
+        var groups = messages
+            .Where(m => !string.IsNullOrWhiteSpace(m.CallId))
+            .GroupBy(m => m.CallId)
+            .Where(g => g.Any(m => m.SipMethod.Equals("REGISTER", StringComparison.OrdinalIgnoreCase)));
+
+        var result = new List<RegistrationSummary>();
+
+        foreach (var g in groups)
+        {
+            var ordered = g.OrderBy(m => m.Timestamp).ToList();
+            var firstRegister = ordered.First(m => m.SipMethod.Equals("REGISTER", StringComparison.OrdinalIgnoreCase));
+            var lastResponse = ordered.LastOrDefault(m => StatusCodeRegex.IsMatch(m.SipMethod));
+
+            var user = !string.IsNullOrEmpty(firstRegister.FromNumber) ? firstRegister.FromNumber : firstRegister.ToNumber;
+
+            result.Add(new RegistrationSummary
+            {
+                CallId = g.Key,
+                User = user,
+                StartTime = firstRegister.Timestamp,
+                FinalStatus = lastResponse?.SipMethod ?? "No Response",
+                MessageCount = ordered.Count,
+                SourceFile = firstRegister.SourceFile
+            });
+        }
+
+        return result.OrderBy(r => r.StartTime).ToList();
+    }
+
+    private static readonly Regex StatusCodeRegex = new(@"^\d{3}\s", RegexOptions.Compiled);
 
     private string ExtractSipMethod(List<string> bodyLines)
     {

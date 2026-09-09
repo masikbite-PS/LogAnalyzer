@@ -71,6 +71,8 @@ namespace LogAnalyzer.ViewModels
 
         public CallSearchViewModel CallSearchViewModel { get; } = new();
 
+        public SipRegistrationViewModel SipRegistrationViewModel { get; } = new();
+
         [RelayCommand]
         private void SelectLogFolder()
         {
@@ -149,7 +151,7 @@ namespace LogAnalyzer.ViewModels
                     callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
-                SelectedTabIndex = 1;
+                SelectedTabIndex = 2;
             }
             catch (OperationCanceledException)
             {
@@ -170,6 +172,12 @@ namespace LogAnalyzer.ViewModels
         private async Task ScanForCalls()
         {
             await CallSearchViewModel.ScanAsync(LogFolderPath);
+        }
+
+        [RelayCommand]
+        private async Task ScanForRegistrations()
+        {
+            await SipRegistrationViewModel.ScanAsync(LogFolderPath);
         }
 
         [RelayCommand]

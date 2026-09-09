@@ -14,4 +14,5 @@ public class SipMessage
     public int SequenceNumber { get; set; }
     public string FromNumber { get; set; } = "";
     public string ToNumber { get; set; } = "";
+    public string Expires { get; set; } = "";
 }
