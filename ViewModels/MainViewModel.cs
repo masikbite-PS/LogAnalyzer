@@ -79,6 +79,8 @@ namespace LogAnalyzer.ViewModels
 
         public CallSearchViewModel CallSearchViewModel { get; } = new();
 
+        public SipRegistrationViewModel SipRegistrationViewModel { get; } = new();
+
         [RelayCommand]
         private void SelectPbxFolder()
         {
@@ -201,7 +203,7 @@ namespace LogAnalyzer.ViewModels
                 SipViewModel.SetData(sipMessages, CallId, callInfo.PartnerSipCallIds);
 
                 StatusMessage = $"Found {filteredEntries.Count} log entries in {callInfo.SourceFiles.Count} files";
-                SelectedTabIndex = 1;
+                SelectedTabIndex = 2;
             }
             catch (OperationCanceledException)
             {
@@ -223,6 +225,13 @@ namespace LogAnalyzer.ViewModels
         {
             var folder = !string.IsNullOrWhiteSpace(SipFolderPath) ? SipFolderPath : PbxFolderPath;
             await CallSearchViewModel.ScanAsync(folder);
+        }
+
+        [RelayCommand]
+        private async Task ScanForRegistrations()
+        {
+            var folder = !string.IsNullOrWhiteSpace(SipFolderPath) ? SipFolderPath : PbxFolderPath;
+            await SipRegistrationViewModel.ScanAsync(folder);
         }
 
         [RelayCommand]

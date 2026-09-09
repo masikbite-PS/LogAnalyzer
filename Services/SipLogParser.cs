@@ -225,6 +225,39 @@ public class SipLogParser
             .ToList();
     }
 
+    public List<RegistrationSummary> BuildRegistrationSummaries(List<SipMessage> messages)
+    {
+        var groups = messages
+            .Where(m => !string.IsNullOrWhiteSpace(m.CallId))
+            .GroupBy(m => m.CallId)
+            .Where(g => g.Any(m => m.SipMethod.Equals("REGISTER", StringComparison.OrdinalIgnoreCase)));
+
+        var result = new List<RegistrationSummary>();
+
+        foreach (var g in groups)
+        {
+            var ordered = g.OrderBy(m => m.Timestamp).ToList();
+            var firstRegister = ordered.First(m => m.SipMethod.Equals("REGISTER", StringComparison.OrdinalIgnoreCase));
+            var lastResponse = ordered.LastOrDefault(m => StatusCodeRegex.IsMatch(m.SipMethod));
+
+            var user = !string.IsNullOrEmpty(firstRegister.FromNumber) ? firstRegister.FromNumber : firstRegister.ToNumber;
+
+            result.Add(new RegistrationSummary
+            {
+                CallId = g.Key,
+                User = user,
+                StartTime = firstRegister.Timestamp,
+                FinalStatus = lastResponse?.SipMethod ?? "No Response",
+                MessageCount = ordered.Count,
+                SourceFile = firstRegister.SourceFile
+            });
+        }
+
+        return result.OrderBy(r => r.StartTime).ToList();
+    }
+
+    private static readonly Regex StatusCodeRegex = new(@"^\d{3}\s", RegexOptions.Compiled);
+
     private string ExtractSipMethod(List<string> bodyLines)
     {
         if (bodyLines.Count == 0)
