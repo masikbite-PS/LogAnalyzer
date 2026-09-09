@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>2026.0.3</Version>
-    <AssemblyVersion>2026.0.3</AssemblyVersion>
-    <FileVersion>2026.0.3</FileVersion>
+    <Version>2026.0.4</Version>
+    <AssemblyVersion>2026.0.4</AssemblyVersion>
+    <FileVersion>2026.0.4</FileVersion>
     <Product>PBX Log Analyzer (2026.0)</Product>
     <Company>masikbite-PS</Company>
     <ApplicationIcon>loganalyzer_icon.ico</ApplicationIcon>
