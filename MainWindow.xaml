@@ -221,7 +221,90 @@
                 </Grid>
             </TabItem>
 
-            <!-- Tab 2: Log Analysis -->
+            <!-- Tab 2: SIP Subscriptions -->
+            <TabItem Header="SIP Subscriptions" Padding="10,5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="2*"/>
+                        <RowDefinition Height="5"/>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Scans the SIP folder (or PBX folder if SIP is not set) for SUBSCRIBE and NOTIFY messages and lists one row per subscription dialog (Call-ID). Select a row to see its full SIP chain below."
+                                   TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#555"/>
+                        <Button Grid.Column="1" Content="Scan for Subscriptions" Command="{Binding ScanForSubscriptionsCommand}"
+                                Padding="15,5" Width="160" Margin="10,0,0,0"/>
+                    </Grid>
+
+                    <DataGrid Grid.Row="1" Margin="10,0,10,10"
+                              ItemsSource="{Binding SipSubscriptionViewModel.Subscriptions}"
+                              SelectedItem="{Binding SipSubscriptionViewModel.SelectedSubscription}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              SelectionUnit="FullRow" SelectionMode="Single"
+                              ClipboardCopyMode="IncludeHeader"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                              BorderThickness="1" BorderBrush="#CCCCCC"
+                              RowBackground="White" AlternatingRowBackground="#F8F8F8">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Start Time" Binding="{Binding StartTime, StringFormat=yyyy-MM-dd HH:mm:ss.fff}" Width="170"/>
+                            <DataGridTextColumn Header="Subscriber" Binding="{Binding Subscriber}" Width="110"/>
+                            <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="110"/>
+                            <DataGridTextColumn Header="Event" Binding="{Binding Event}" Width="100"/>
+                            <DataGridTextColumn Header="SUB" Binding="{Binding SubscribeCount}" Width="45"/>
+                            <DataGridTextColumn Header="NOTIFY" Binding="{Binding NotifyCount}" Width="60"/>
+                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="160"/>
+                            <DataGridTextColumn Header="Final Status" Binding="{Binding FinalStatus}" Width="110"/>
+                            <DataGridTextColumn Header="Call-ID" Binding="{Binding CallId}" Width="*"/>
+                            <DataGridTemplateColumn Header="" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Copy" Padding="8,2" FontSize="10"
+                                                Command="{Binding DataContext.SipSubscriptionViewModel.CopyCallIdCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Copy Call-ID"
+                                          Command="{Binding PlacementTarget.DataContext.SipSubscriptionViewModel.CopyCallIdCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                    </DataGrid>
+
+                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="#D0D0D0"/>
+
+                    <Grid Grid.Row="3" Margin="10,8,10,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="SIP Chain" FontWeight="Bold" FontSize="11"
+                                   Foreground="#555" Margin="0,0,0,4"/>
+                        <TextBox Grid.Row="1" IsReadOnly="True" FontFamily="Courier New" FontSize="10"
+                                 TextWrapping="NoWrap" Padding="8"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 Text="{Binding SipSubscriptionViewModel.ChainDiagram, Mode=OneWay}"
+                                 Background="#F9F9F9" BorderThickness="1" BorderBrush="#CCCCCC"/>
+                    </Grid>
+
+                    <TextBlock Grid.Row="4" Margin="10,4,10,6"
+                               Text="{Binding SipSubscriptionViewModel.StatusMessage}"
+                               VerticalAlignment="Center" Foreground="#555"/>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: Log Analysis -->
             <TabItem Header="Log Analysis" Padding="10,5">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -298,7 +381,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- Tab 3: SQL Data -->
+            <!-- Tab 4: SQL Data -->
             <TabItem Header="SQL Data" Padding="10,5">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -394,7 +477,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- Tab 4: SIP Messages -->
+            <!-- Tab 5: SIP Messages -->
             <TabItem Header="SIP Messages" Padding="10,5">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -510,7 +593,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- Tab 5: Scripts -->
+            <!-- Tab 6: Scripts -->
             <TabItem Header="Scripts" Padding="10,5">
                 <Grid>
                     <Grid.RowDefinitions>

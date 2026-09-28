@@ -45,6 +45,16 @@ public class SipLogParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
     );
 
+    private static readonly Regex EventRegex = new(
+        @"^Event:\s*(\S+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
+    private static readonly Regex SubscriptionStateRegex = new(
+        @"^Subscription-State:\s*(.+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline
+    );
+
     private static readonly Regex ExpiresParamRegex = new(
         @"[;,]\s*expires=(\d+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase
@@ -199,6 +209,9 @@ public class SipLogParser
             if (!expiresMatch.Success)
                 expiresMatch = ExpiresParamRegex.Match(rawBody);
 
+            var eventMatch = EventRegex.Match(rawBody);
+            var subStateMatch = SubscriptionStateRegex.Match(rawBody);
+
             return new SipMessage
             {
                 Timestamp = timestamp,
@@ -212,7 +225,9 @@ public class SipLogParser
                 SourceFile = sourceFile,
                 FromNumber = fromMatch.Success ? fromMatch.Groups[1].Value.Trim() : "",
                 ToNumber = toMatch.Success ? toMatch.Groups[1].Value.Trim() : "",
-                Expires = expiresMatch.Success ? expiresMatch.Groups[1].Value.Trim() : ""
+                Expires = expiresMatch.Success ? expiresMatch.Groups[1].Value.Trim() : "",
+                Event = eventMatch.Success ? eventMatch.Groups[1].Value.Trim() : "",
+                SubscriptionState = subStateMatch.Success ? subStateMatch.Groups[1].Value.Trim() : ""
             };
         }
         catch
@@ -265,6 +280,48 @@ public class SipLogParser
                 FinalStatus = lastResponse?.SipMethod ?? "No Response",
                 MessageCount = ordered.Count,
                 SourceFile = firstRegister.SourceFile
+            });
+        }
+
+        return result.OrderBy(r => r.StartTime).ToList();
+    }
+
+    public List<SubscriptionSummary> BuildSubscriptionSummaries(List<SipMessage> messages)
+    {
+        static bool IsSubscribe(SipMessage m) => m.SipMethod.Equals("SUBSCRIBE", StringComparison.OrdinalIgnoreCase);
+        static bool IsNotify(SipMessage m) => m.SipMethod.Equals("NOTIFY", StringComparison.OrdinalIgnoreCase);
+
+        var groups = messages
+            .Where(m => !string.IsNullOrWhiteSpace(m.CallId))
+            .GroupBy(m => m.CallId)
+            .Where(g => g.Any(m => IsSubscribe(m) || IsNotify(m)));
+
+        var result = new List<SubscriptionSummary>();
+
+        foreach (var g in groups)
+        {
+            var ordered = g.OrderBy(m => m.Timestamp).ToList();
+            var first = ordered.FirstOrDefault(IsSubscribe) ?? ordered.First(IsNotify);
+            var lastSubscribe = ordered.LastOrDefault(IsSubscribe);
+            var lastState = ordered.LastOrDefault(m => !string.IsNullOrEmpty(m.SubscriptionState));
+            var lastResponse = ordered.LastOrDefault(m => StatusCodeRegex.IsMatch(m.SipMethod));
+
+            var state = lastState?.SubscriptionState ?? "";
+            if (state.Length == 0 && lastSubscribe?.Expires == "0")
+                state = "terminated (Expires: 0)";
+
+            result.Add(new SubscriptionSummary
+            {
+                CallId = g.Key,
+                Subscriber = first.FromNumber,
+                Target = first.ToNumber,
+                Event = ordered.Select(m => m.Event).FirstOrDefault(e => !string.IsNullOrEmpty(e)) ?? "",
+                StartTime = first.Timestamp,
+                SubscribeCount = ordered.Count(IsSubscribe),
+                NotifyCount = ordered.Count(IsNotify),
+                State = state,
+                FinalStatus = lastResponse?.SipMethod ?? "No Response",
+                SourceFile = first.SourceFile
             });
         }
 

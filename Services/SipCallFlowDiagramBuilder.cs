@@ -13,6 +13,8 @@ public class SipCallFlowDiagramBuilder
     private const int ToWidth = 18;
     private const int MessageWidth = 14;
     private const int ExpiresWidth = 20;
+    private const int EventWidth = 18;
+    private const int StateWidth = 34;
 
     public string Build(IEnumerable<SipMessage> messages)
     {
@@ -22,11 +24,18 @@ public class SipCallFlowDiagramBuilder
 
         var sb = new StringBuilder();
         var hasExpires = msgList.Any(m => !string.IsNullOrEmpty(m.Expires));
+        var hasEvent = msgList.Any(m => !string.IsNullOrEmpty(m.Event));
+        var hasState = msgList.Any(m => !string.IsNullOrEmpty(m.SubscriptionState));
+        var totalWidth = TimeWidth + FromWidth + ToWidth + MessageWidth
+                         + (hasExpires ? ExpiresWidth : 0)
+                         + (hasEvent ? EventWidth : 0)
+                         + (hasState ? StateWidth : 0) + 50;
 
         sb.AppendLine("Merged Call Flow with Session Details");
-        sb.AppendLine(new string('═', TimeWidth + FromWidth + ToWidth + MessageWidth + (hasExpires ? ExpiresWidth : 0) + 50));
-        sb.AppendLine($"{"Time".PadRight(TimeWidth)}{"From".PadRight(FromWidth)}{"To".PadRight(ToWidth)}{"Message".PadRight(MessageWidth)}{(hasExpires ? "Expires".PadRight(ExpiresWidth) : "")}SDP");
-        sb.AppendLine(new string('─', TimeWidth + FromWidth + ToWidth + MessageWidth + (hasExpires ? ExpiresWidth : 0) + 50));
+        sb.AppendLine(new string('═', totalWidth));
+        sb.AppendLine($"{"Time".PadRight(TimeWidth)}{"From".PadRight(FromWidth)}{"To".PadRight(ToWidth)}{"Message".PadRight(MessageWidth)}"
+                      + $"{(hasExpires ? "Expires".PadRight(ExpiresWidth) : "")}{(hasEvent ? "Event".PadRight(EventWidth) : "")}{(hasState ? "Sub-State".PadRight(StateWidth) : "")}SDP");
+        sb.AppendLine(new string('─', totalWidth));
 
         foreach (var msg in msgList)
         {
@@ -41,12 +50,14 @@ public class SipCallFlowDiagramBuilder
                      + toLabel.PadRight(ToWidth)
                      + method.PadRight(MessageWidth)
                      + expiresLabel
+                     + (hasEvent ? msg.Event.PadRight(EventWidth) : "")
+                     + (hasState ? msg.SubscriptionState.PadRight(StateWidth) : "")
                      + sdpInfo.Summary;
 
             sb.AppendLine(line);
         }
 
-        sb.AppendLine(new string('─', TimeWidth + FromWidth + ToWidth + MessageWidth + (hasExpires ? ExpiresWidth : 0) + 50));
+        sb.AppendLine(new string('─', totalWidth));
 
         return sb.ToString().TrimEnd();
     }

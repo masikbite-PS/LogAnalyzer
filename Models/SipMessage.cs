@@ -15,4 +15,6 @@ public class SipMessage
     public string FromNumber { get; set; } = "";
     public string ToNumber { get; set; } = "";
     public string Expires { get; set; } = "";
+    public string Event { get; set; } = "";
+    public string SubscriptionState { get; set; } = "";
 }
